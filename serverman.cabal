@@ -1,0 +1,58 @@
+name:                serverman
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/mdibaiee/serverman
+license:             GPL-3
+license-file:        LICENSE
+author:              Mahdi Dibaiee
+maintainer:          mahdi@theread.me
+copyright:           2017 Mahdi Dibaiee
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     System.Term
+                     , System.Serverman
+                     , System.Serverman.Utils
+                     , System.Serverman.Action
+                     , System.Serverman.Actions.Nginx
+                     , System.Serverman.Actions.WebServer
+                     , System.Serverman.Actions.Install
+                     , System.Serverman.Actions.Env
+                     , System.Serverman.Services
+  build-depends:       base >= 4.7 && < 5
+                     , free >= 4.12.4 && < 5
+                     , hscolour >= 1.24.1 && < 2
+                     , cmdargs >= 0.10.14 && < 1
+                     , data-default-class
+                     , process
+                     , directory
+                     , filepath
+                     , async
+  default-language:    Haskell2010
+
+executable serverman
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , serverman
+                     , cli >= 0.1.2 && < 1
+  default-language:    Haskell2010
+
+test-suite serverman-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , serverman
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/githubuser/serverman
