@@ -32,18 +32,9 @@ module System.Serverman.Actions.Nginx (nginx) where
       writeFile path content
 
       putStrLn $ "wrote your configuration file to " ++ path
-
-      restart <- async $ do
-        let command = "systemctl restart nginx"
-        result <- tryIOError $ callCommand command
-        case result of
-          Left err -> do
-            putStrLn $ commandError command
-          Right _ ->
-            putStrLn $ "restarted " ++ show (service params)
-
-      wait restart
       
+      wait =<< restart
+
       when (ssl params) $ do
         case serverType params of
           Static -> do
@@ -56,6 +47,7 @@ module System.Serverman.Actions.Nginx (nginx) where
                 Right _ -> do
                   putStrLn $ "created a certificate for " ++ domain params
                   writeFile path (show params)
+                  wait =<< restart
                   
             wait letsencrypt
           _ -> do
@@ -66,3 +58,13 @@ module System.Serverman.Actions.Nginx (nginx) where
 
         putStrLn $ "for more information, see: https://certbot.eff.org/"
       return ()
+    where
+      restart = async $ do
+        let command = "systemctl restart nginx"
+        result <- tryIOError $ callCommand command
+        case result of
+          Left err -> do
+            putStrLn $ commandError command
+          Right _ ->
+            putStrLn $ "restarted " ++ show (service params)
+
