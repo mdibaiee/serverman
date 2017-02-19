@@ -12,28 +12,30 @@ module System.Serverman.Actions.Install (installService) where
 
   class Installable a where
     dependencies :: a -> [String]
-    package :: a -> String
+    package :: a -> OS -> String
 
   instance Installable Service where
     dependencies _ = []
 
-    package NGINX = "nginx"
-    package Apache = "apache2"
+    package NGINX _ = "nginx"
+    package MySQL _ = "mysql"
 
   installService :: Service -> OS -> IO ()
   installService service os = do
-    let command = case os of
-          Arch -> "pacman -S "
-          Debian -> "apt-get install "
-          Mac -> "brew install "
-          _ -> "echo 'Unknown operating system'"
+    let base = case os of
+          Arch -> ("pacman", ["-S", "--noconfirm", "--quiet"])
+          Debian -> ("apt-get", ["install", "-y"])
+          Mac -> ("brew", ["install", "-y"])
+          _ -> ("echo", ["Unknown operating system"])
+        pkg = package service os
+
 
     process <- async $ do
-      result <- tryIOError $ callCommand (command ++ package service)
+      result <- execute (fst base) (snd base ++ [pkg]) "" True
 
       case result of
-        Left err ->
-          putStrLn $ commandError command
-        Right _ ->
+        Left err -> return ()
+        Right stdout -> do
+          putStrLn stdout
           putStrLn $ "installed " ++ show service ++ "."
     wait process

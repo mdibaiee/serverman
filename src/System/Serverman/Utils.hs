@@ -2,11 +2,17 @@ module System.Serverman.Utils ( keyvalue
                               , nginxBlock
                               , nginxSSL
                               , writeFileIfMissing
-                              , commandError) where
+                              , commandError
+                              , execute) where
 
   import System.IO
   import Control.Monad
   import System.Directory
+  import System.Process
+  import System.IO.Error
+  import Control.Concurrent.Async
+  import Data.List
+  import Control.Exception
 
   keyvalue :: [(String, String)] -> String
   keyvalue ((a, b):xs) = a ++ " " ++ b ++ ";\n" ++ keyvalue xs
@@ -27,6 +33,21 @@ module System.Serverman.Utils ( keyvalue
 
   commandError :: String -> String
   commandError command = "[Error] an error occured while running: " ++ command ++ "\nplease try running the command manually."
+
+  execute :: String -> [String] -> String -> Bool -> IO (Either String String)
+  execute cmd args stdin logErrors = do
+    let command = cmd ++ " " ++ intercalate " " args
+
+    process <- async $ do
+      result <- tryIOError $ readProcessWithExitCode cmd args stdin
+
+      case result of
+         Right (_, stdout, _) -> return $ Right stdout
+         Left err -> do
+           when logErrors $ putStrLn (commandError command)
+           return $ Left (show err)
+
+    wait process
 
   nginxSSL = "ssl_protocols TLSv1 TLSv1.1 TLSv1.2;\n\
 \ssl_prefer_server_ciphers on;\n\

@@ -5,18 +5,17 @@ module System.Serverman.Actions.WebServer (ServerParams(..), ServerType(..)) whe
   import Control.Monad.Free
 
   data ServerType = Static | PortForwarding deriving (Show, Eq)
-  data ServerParams = ServerParams { directory  :: String
-                                   , domain     :: String
-                                   , port       :: String
-                                   , forward    :: String
-                                   , output     :: String
-                                   , ssl        :: Bool
-                                   , serverType :: ServerType
-                                   , service    :: Service
+  data ServerParams = ServerParams { directory     :: String
+                                   , domain        :: String
+                                   , port          :: String
+                                   , forward       :: String
+                                   , ssl           :: Bool
+                                   , serverType    :: ServerType
+                                   , serverService :: Service
                                    } deriving (Eq)
   instance Show ServerParams where
     show conf 
-      | service conf == NGINX = 
+      | serverService conf == NGINX = 
           let https
                 | ssl conf = [ ("ssl_certificate", "/etc/letsencrypt/live/" ++ domain conf ++ "/fullchain.pem")
                              , ("ssl_certificate_key", "/etc/letsencrypt/live/" ++ domain conf ++ "/privkey.pem")

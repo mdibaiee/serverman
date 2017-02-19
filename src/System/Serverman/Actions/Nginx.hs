@@ -1,7 +1,9 @@
+{-# LANGUAGE NamedFieldPuns #-}
 module System.Serverman.Actions.Nginx (nginx) where
   import System.Serverman.Action
   import System.Serverman.Actions.WebServer
   import System.Serverman.Utils
+  import System.Serverman.Services
 
   import System.Directory
   import System.IO
@@ -13,19 +15,19 @@ module System.Serverman.Actions.Nginx (nginx) where
   import Control.Monad.Free
 
   nginx :: ServerParams -> IO ()
-  nginx params = 
+  nginx params@(ServerParams { ssl, serverService, domain, directory, serverType }) = 
     do
       -- Turn SSL off at first, because we have not yet received a certificate
       let content = show (params { ssl = False })
-          parent = output params </> "configs"
-          path = parent </> domain params
-          targetDir = directory params
+          parent = configDirectory serverService </> "configs"
+          path = parent </> domain
+          targetDir = directory
 
       createDirectoryIfMissing True targetDir
       createDirectoryIfMissing True parent
 
-      when (ssl params) $ do
-        let sslPath = output params </> "ssl.conf"
+      when ssl $ do
+        let sslPath = configDirectory serverService </> "ssl.conf"
         writeFileIfMissing sslPath nginxSSL
         putStrLn $ "wrote ssl configuration to " ++ sslPath
 
@@ -35,36 +37,32 @@ module System.Serverman.Actions.Nginx (nginx) where
       
       wait =<< restart
 
-      when (ssl params) $ do
-        case serverType params of
+      when ssl $ do
+        case serverType of
           Static -> do
-            let command = "certbot certonly --webroot --webroot-path " ++ directory params ++ " -d " ++ domain params
             letsencrypt <- async $ do
-              result <- tryIOError $ callCommand command
+              result <- execute "certbot" ["certonly", "--webroot", "--webroot-path", directory, "-d", domain] "" True
               case result of
-                Left err -> do
-                  putStrLn $ commandError command
+                Left _ -> return ()
                 Right _ -> do
-                  putStrLn $ "created a certificate for " ++ domain params
+                  putStrLn $ "created a certificate for " ++ domain
                   writeFile path (show params)
                   wait =<< restart
                   
             wait letsencrypt
           _ -> do
             putStrLn $ "you should use letsencrypt to create a certificate for your domain"
-            putStrLn $ "and put it in /etc/letsencrypt/live/" ++ domain params ++ "/fullchain.pem"
+            putStrLn $ "and put it in /etc/letsencrypt/live/" ++ domain ++ "/fullchain.pem"
             putStrLn $ "my suggestion is running this command:"
-            putStrLn $ "sudo certbot certonly --webroot --webroot-path <YOUR_APPLICATION_DIRECTORY> -d " ++ domain params
+            putStrLn $ "sudo certbot certonly --webroot --webroot-path <YOUR_APPLICATION_DIRECTORY> -d " ++ domain 
 
         putStrLn $ "for more information, see: https://certbot.eff.org/"
       return ()
     where
       restart = async $ do
-        let command = "systemctl restart nginx"
-        result <- tryIOError $ callCommand command
+        result <- execute "systemctl" ["restart", "nginx"] "" True
         case result of
-          Left err -> do
-            putStrLn $ commandError command
+          Left err -> return ()
           Right _ ->
-            putStrLn $ "restarted " ++ show (service params)
+            putStrLn $ "restarted " ++ show serverService
 
