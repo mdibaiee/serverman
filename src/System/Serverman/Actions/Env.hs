@@ -4,17 +4,18 @@ module System.Serverman.Actions.Env (OS(..), getOS) where
   import System.IO.Error
   import Data.Either
 
-  data OS = Debian | Arch | Unknown deriving (Show, Eq)
+  data OS = Debian | Arch | Mac | Unknown deriving (Show, Eq)
   
   getOS = do
     arch_release <- tryIOError $ readProcessWithExitCode "/usr/bin/cat" ["/etc/os-release"] ""
     deb_release <- tryIOError $ readProcessWithExitCode "/usr/bin/cat" ["/etc/lsb-release"] ""
-    -- mac_release <- tryIOError $ readProcessWithExitCode "/usr/bin/sw_vers" ["-productVersion"] ""
+    mac_release <- tryIOError $ readProcessWithExitCode "/usr/bin/sw_vers" ["-productName"] ""
 
     let (_, release, _) = head $ rights [arch_release, deb_release, mac_release] 
         distro
             | or $ map (`isInfixOf` release) ["ubuntu", "debian", "raspbian"] = Debian
             | "arch" `isInfixOf` release = Arch
+            | "Mac" `isInfixOf` release = Mac
             | otherwise = Unknown
 
     return distro

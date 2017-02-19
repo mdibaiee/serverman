@@ -25,6 +25,7 @@ module System.Serverman.Actions.Install (installService) where
     let command = case os of
           Arch -> "pacman -S "
           Debian -> "apt-get install "
+          Mac -> "brew install "
           _ -> "echo 'Unknown operating system'"
 
     process <- async $ do
