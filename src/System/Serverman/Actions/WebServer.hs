@@ -41,8 +41,7 @@ module System.Serverman.Actions.WebServer (ServerParams(..), ServerType(..)) whe
           in 
             case serverType conf of
               Static -> 
-                (block "server" $ keyvalue (base ++ [("root", directory conf)])) ++
-                redirect
+                (block "server" $ keyvalue (base ++ [("root", directory conf)])) ++ "\n" ++ redirect
 
               PortForwarding -> 
                 let proxyBlock = block "location /" $
@@ -51,6 +50,6 @@ module System.Serverman.Actions.WebServer (ServerParams(..), ServerType(..)) whe
                                               , ("proxy_set_header", "X-Forwarded-Server $host")
                                               , ("proxy_set_header", "X-Forwarded-For $proxy_add_x_forwarded_for")
                                               ])
-                in (block "server" $ keyvalue base ++ proxyBlock) ++ redirect
+                in (block "server" $ keyvalue base ++ proxyBlock) ++ "\n" ++ redirect
 
       | otherwise = "Unknown service provider"
