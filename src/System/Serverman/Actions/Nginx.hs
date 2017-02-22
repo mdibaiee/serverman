@@ -64,7 +64,7 @@ module System.Serverman.Actions.Nginx (nginx) where
             putStrLn $ "restarted " ++ show serverService
 
       createCert path cmd = do
-        result <- execute cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain, "--email", email, "--agree-tos"] "" False
+        result <- execute cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain, "--email", email, "--agree-tos", "-n"] "" False
         case result of
           Left _ -> if cmd == "letsencrypt" then createCert path "certbot" else return ()
           Right stdout -> do
