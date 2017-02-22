@@ -58,12 +58,24 @@ module System.Serverman.Utils ( keyvalue
 
     wait process
 
-  nginxSSL = "ssl_protocols TLSv1 TLSv1.1 TLSv1.2;\n\
+  nginxSSL = "# from https://cipherli.st/\n\
+\# and https://raymii.org/s/tutorials/Strong_SSL_Security_On_nginx.html\n\
+\\n\
+\ssl_protocols TLSv1 TLSv1.1 TLSv1.2;\n\
 \ssl_prefer_server_ciphers on;\n\
-\ssl_dhparam /etc/ssl/certs/dhparam.pem;\n\
-\ssl_ciphers 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA';\n\
-\ssl_session_timeout 1d;\n\
-\ssl_session_cache shared:SSL:50m;\n\
+\ssl_ciphers 'EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH';\n\
+\ssl_ecdh_curve secp384r1;\n\
+\ssl_session_cache shared:SSL:10m;\n\
+\ssl_session_tickets off;\n\
 \ssl_stapling on;\n\
 \ssl_stapling_verify on;\n\
-\add_header Strict-Transport-Security max-age=15768000;"
+\resolver 8.8.8.8 8.8.4.4 valid=300s;\n\
+\resolver_timeout 5s;\n\
+\# Disable preloading HSTS for now.  You can use the commented out header line that includes\n\
+\# the 'preload' directive if you understand the implications.\n\
+\#add_header Strict-Transport-Security 'max-age=63072000; includeSubdomains; preload';\n\
+\add_header Strict-Transport-Security 'max-age=63072000; includeSubdomains';\n\
+\add_header X-Frame-Options DENY;\n\
+\add_header X-Content-Type-Options nosniff;\n\
+\\n\
+\ssl_dhparam /etc/ssl/certs/dhparam.pem;\n"
