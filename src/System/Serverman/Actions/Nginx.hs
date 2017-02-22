@@ -13,6 +13,7 @@ module System.Serverman.Actions.Nginx (nginx) where
   import Control.Concurrent.Async
   import Control.Monad
   import Control.Monad.Free
+  import Data.List
 
   nginx :: ServerParams -> IO ()
   nginx params@(ServerParams { ssl, serverService, domain, directory, serverType }) = 
@@ -40,15 +41,8 @@ module System.Serverman.Actions.Nginx (nginx) where
       when ssl $ do
         case serverType of
           Static -> do
-            letsencrypt <- async $ do
-              result <- execute "certbot" ["certonly", "--webroot", "--webroot-path", directory, "-d", domain] "" True
-              case result of
-                Left _ -> return ()
-                Right _ -> do
-                  putStrLn $ "created a certificate for " ++ domain
-                  writeFile path (show params)
-                  wait =<< restart
-                  
+            letsencrypt <- async $ createCert path "letsencrypt"
+              
             wait letsencrypt
           _ -> do
             putStrLn $ "you should use letsencrypt to create a certificate for your domain"
@@ -65,4 +59,16 @@ module System.Serverman.Actions.Nginx (nginx) where
           Left err -> return ()
           Right _ ->
             putStrLn $ "restarted " ++ show serverService
+
+      createCert path cmd = do
+        result <- execute cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain] "" False
+        case result of
+          Left _ -> if cmd == "letsencrypt" then createCert path "certbot" else return ()
+          Right stdout -> do
+            putStrLn stdout
+
+            when (not ("error" `isInfixOf` stdout)) $ do
+              writeFile path (show params)
+              wait =<< restart
+
 

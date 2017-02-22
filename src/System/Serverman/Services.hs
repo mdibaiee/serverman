@@ -3,6 +3,7 @@ module System.Serverman.Services ( Service(..)
 
   data Service = NGINX
                | MySQL
+               | LetsEncrypt
                  deriving (Eq, Show)
 
   class Configurable a where
@@ -16,3 +17,4 @@ module System.Serverman.Services ( Service(..)
     readsPrec _ service
           | service == "nginx" = [(NGINX, [])]
           | service == "mysql" = [(MySQL, [])]
+          | service == "letsencrypt" = [(LetsEncrypt, [])]

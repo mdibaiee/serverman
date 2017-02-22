@@ -9,19 +9,26 @@ module System.Serverman.Actions.Install (installService) where
   import System.Process
   import Control.Concurrent.Async
   import Control.Monad.Free
+  import Control.Monad
 
   class Installable a where
-    dependencies :: a -> [String]
+    dependencies :: a -> [a]
     package :: a -> OS -> String
 
   instance Installable Service where
+    dependencies NGINX = [LetsEncrypt]
     dependencies _ = []
 
     package NGINX _ = "nginx"
     package MySQL _ = "mysql"
 
+    package LetsEncrypt Arch = "certbot"
+    package LetsEncrypt _ = "letsencrypt"
+
   installService :: Service -> OS -> IO ()
   installService service os = do
+    forM_ (dependencies service) (`installService` os) 
+
     let base = case os of
           Arch -> ("pacman", ["-S", "--noconfirm", "--quiet"])
           Debian -> ("apt-get", ["install", "-y"])
@@ -29,13 +36,11 @@ module System.Serverman.Actions.Install (installService) where
           _ -> ("echo", ["Unknown operating system"])
         pkg = package service os
 
-
     process <- async $ do
       result <- execute (fst base) (snd base ++ [pkg]) "" True
 
       case result of
         Left err -> return ()
-        Right stdout -> do
-          putStrLn stdout
+        Right _ -> do
           putStrLn $ "installed " ++ show service ++ "."
     wait process

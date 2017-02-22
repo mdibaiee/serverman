@@ -91,14 +91,16 @@ module System.Term ( initialize ) where
                                 , S.serverType    = serverType
                                 , S.serverService = serviceName
                                 }
-    S.run $ S.newServer params
+    S.run $ S.detectOS >>= (S.install serviceName) >> S.newServer params
 
   manualInstall (InstallParams { iService }) = do
     S.run $ S.detectOS >>= (S.install (read iService))
 
   databaseSetup (DatabaseParams { databaseName, dService }) = do
-    let params = S.DatabaseParams { S.database = databaseName
-                                  , S.databaseService = read dService }
+    let serviceName = read dService
 
-    S.run $ S.newDatabase params
+    let params = S.DatabaseParams { S.database = databaseName
+                                  , S.databaseService = serviceName }
+
+    S.run $ S.detectOS >>= (S.install serviceName) >> S.newDatabase params
 
