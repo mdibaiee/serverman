@@ -80,7 +80,7 @@ module System.Serverman.Actions.Nginx (nginx) where
         let statement = "include " ++ target ++ "/*;"
 
         when (not (statement `isInfixOf` content)) $ do
-          let newContent = appendAfter content "http {" ("    " ++ statement)
+          let newContent = appendAfter content "http {" (indent . indent $ statement)
 
           writeFile path newContent
 
