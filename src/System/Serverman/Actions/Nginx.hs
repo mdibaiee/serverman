@@ -20,12 +20,15 @@ module System.Serverman.Actions.Nginx (nginx) where
     do
       -- Turn SSL off at first, because we have not yet received a certificate
       let content = show (params { ssl = False, port = "80" })
-          parent = configDirectory serverService </> "configs"
+          mainConfig = configDirectory serverService </> "nginx.conf"
+          parent = configDirectory serverService </> "serverman-configs"
           path = parent </> domain
           targetDir = directory
 
       createDirectoryIfMissing True targetDir
       createDirectoryIfMissing True parent
+
+      writeIncludeStatementIfMissing mainConfig parent
 
       when ssl $ do
         let sslPath = configDirectory serverService </> "ssl.conf"
@@ -70,5 +73,15 @@ module System.Serverman.Actions.Nginx (nginx) where
             when (not ("error" `isInfixOf` stdout)) $ do
               writeFile path (show params)
               wait =<< restart
+
+      writeIncludeStatementIfMissing path target = do
+        content <- readFile path
+
+        let statement = "include " ++ target ++ "/*"
+
+        when (not (statement `isInfixOf` content)) $ do
+          let newContent = appendAfter content "http {" ("    " ++ statement)
+
+          writeFile path newContent
 
 

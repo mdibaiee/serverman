@@ -1,8 +1,10 @@
 module System.Serverman.Utils ( keyvalue
-                              , nginxBlock
+                              , block
                               , nginxSSL
+                              , indent
                               , writeFileIfMissing
                               , commandError
+                              , appendAfter
                               , execute) where
 
   import System.IO
@@ -18,8 +20,8 @@ module System.Serverman.Utils ( keyvalue
   keyvalue ((a, b):xs) = a ++ " " ++ b ++ ";\n" ++ keyvalue xs
   keyvalue [] = ""
 
-  nginxBlock :: String -> String -> String
-  nginxBlock blockName content = blockName ++ " {\n" ++ indent content ++ "}"
+  block :: String -> String -> String
+  block blockName content = blockName ++ " {\n" ++ indent content ++ "}"
 
   writeFileIfMissing :: FilePath -> String -> IO ()
   writeFileIfMissing path content = do
@@ -27,6 +29,13 @@ module System.Serverman.Utils ( keyvalue
     
     when (not exists) $ do
       writeFile path content
+
+  appendAfter :: String -> String -> String -> String
+  appendAfter content after line =
+    let ls = lines content
+        appended = concat $ map (\x -> if x == after then [x, line] else [x]) ls
+
+    in unlines appended
 
   indent :: String -> String
   indent s = unlines $ map ("\t" ++) (lines s)

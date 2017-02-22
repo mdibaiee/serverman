@@ -29,15 +29,15 @@ module System.Serverman.Actions.WebServer (ServerParams(..), ServerType(..)) whe
           in 
             case serverType conf of
               Static -> 
-                nginxBlock "server" $ keyvalue (base ++ [("root", directory conf)])
+                block "server" $ keyvalue (base ++ [("root", directory conf)])
 
               PortForwarding -> 
-                let proxyBlock = nginxBlock "location /" $
+                let proxyBlock = block "location /" $
                                     keyvalue ([ ("proxy_pass", "http://127.0.0.1:" ++ forward conf)
                                               , ("proxy_set_header", "X-Forwarded-Host $host")
                                               , ("proxy_set_header", "X-Forwarded-Server $host")
                                               , ("proxy_set_header", "X-Forwarded-For $proxy_add_x_forwarded_for")
                                               ])
-                in nginxBlock "server" $ keyvalue base ++ proxyBlock
+                in block "server" $ keyvalue base ++ proxyBlock
 
       | otherwise = "Unknown service provider"
