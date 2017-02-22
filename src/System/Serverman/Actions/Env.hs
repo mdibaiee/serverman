@@ -8,9 +8,9 @@ module System.Serverman.Actions.Env (OS(..), getOS) where
   data OS = Debian | Arch | Mac | Unknown deriving (Show, Eq)
   
   getOS = do
-    arch_release <- execute "/usr/bin/cat" ["/etc/os-release"] "" False
-    deb_release <- execute "/usr/bin/cat" ["/etc/lsb-release"] "" False
-    mac_release <- execute "/usr/bin/sw_vers" ["-productName"] "" False
+    arch_release <- execute "cat" ["/etc/os-release"] "" False
+    deb_release <- execute "cat" ["/etc/lsb-release"] "" False
+    mac_release <- execute "sw_vers" ["-productName"] "" False
 
     let release = head $ rights [arch_release, deb_release, mac_release] 
         distro
