@@ -87,7 +87,7 @@ module System.Term ( initialize ) where
 
     let portNumber
           | (not . null) port = port
-          | ssl = "403"
+          | ssl = "433"
           | otherwise = "80"
 
     absoluteDirectory <- makeAbsolute directory
