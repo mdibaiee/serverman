@@ -92,4 +92,24 @@ module System.Serverman.Actions.Nginx (nginx) where
 
           writeFile path newContent
 
-
+  nginxSSL = "# from https://cipherli.st/\n\
+\# and https://raymii.org/s/tutorials/Strong_SSL_Security_On_nginx.html\n\
+\\n\
+\ssl_protocols TLSv1 TLSv1.1 TLSv1.2;\n\
+\ssl_prefer_server_ciphers on;\n\
+\ssl_ciphers 'EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH';\n\
+\ssl_ecdh_curve secp384r1;\n\
+\ssl_session_cache shared:SSL:10m;\n\
+\ssl_session_tickets off;\n\
+\ssl_stapling on;\n\
+\ssl_stapling_verify on;\n\
+\resolver 8.8.8.8 8.8.4.4 valid=300s;\n\
+\resolver_timeout 5s;\n\
+\# Disable preloading HSTS for now.  You can use the commented out header line that includes\n\
+\# the 'preload' directive if you understand the implications.\n\
+\#add_header Strict-Transport-Security 'max-age=63072000; includeSubdomains; preload';\n\
+\add_header Strict-Transport-Security 'max-age=63072000; includeSubdomains';\n\
+\add_header X-Frame-Options DENY;\n\
+\add_header X-Content-Type-Options nosniff;\n\
+\\n\
+\ssl_dhparam /etc/ssl/certs/dhparam.pem;\n"
