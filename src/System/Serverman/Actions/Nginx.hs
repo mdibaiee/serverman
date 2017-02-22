@@ -19,7 +19,7 @@ module System.Serverman.Actions.Nginx (nginx) where
   nginx params@(ServerParams { ssl, serverService, domain, directory, serverType }) = 
     do
       -- Turn SSL off at first, because we have not yet received a certificate
-      let content = show (params { ssl = False })
+      let content = show (params { ssl = False, port = 80 })
           parent = configDirectory serverService </> "configs"
           path = parent </> domain
           targetDir = directory
