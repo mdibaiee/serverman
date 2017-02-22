@@ -77,7 +77,7 @@ module System.Serverman.Actions.Nginx (nginx) where
       writeIncludeStatementIfMissing path target = do
         content <- readFile path
 
-        let statement = "include " ++ target ++ "/*"
+        let statement = "include " ++ target ++ "/*;"
 
         when (not (statement `isInfixOf` content)) $ do
           let newContent = appendAfter content "http {" ("    " ++ statement)
