@@ -9,6 +9,7 @@ module System.Serverman.Actions.WebServer (ServerParams(..), ServerType(..)) whe
                                    , domain        :: String
                                    , port          :: String
                                    , forward       :: String
+                                   , email         :: String
                                    , ssl           :: Bool
                                    , serverType    :: ServerType
                                    , serverService :: Service

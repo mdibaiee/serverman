@@ -16,7 +16,7 @@ module System.Serverman.Actions.Nginx (nginx) where
   import Data.List
 
   nginx :: ServerParams -> IO ()
-  nginx params@(ServerParams { ssl, serverService, domain, directory, serverType }) = 
+  nginx params@(ServerParams { ssl, serverService, domain, directory, serverType, email }) = 
     do
       -- Turn SSL off at first, because we have not yet received a certificate
       let content = show (params { ssl = False, port = "80" })
@@ -64,7 +64,7 @@ module System.Serverman.Actions.Nginx (nginx) where
             putStrLn $ "restarted " ++ show serverService
 
       createCert path cmd = do
-        result <- execute cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain] "" False
+        result <- execute cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain, "--email", email] "" False
         case result of
           Left _ -> if cmd == "letsencrypt" then createCert path "certbot" else return ()
           Right stdout -> do

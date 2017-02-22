@@ -9,8 +9,10 @@ module System.Term ( initialize ) where
   import qualified System.Console.CmdArgs.Explicit as E
   import System.Environment
   import System.Directory
+  import System.Exit
   import Data.Monoid
   import Data.Maybe
+  import Control.Monad
 
   initialize = do
     args <- getArgs
@@ -48,6 +50,7 @@ module System.Term ( initialize ) where
                                 , forward   :: String
                                 , wService  :: String
                                 , ssl       :: Bool
+                                , email     :: String
                                 }
               | DatabaseParams { databaseName :: String
                                , dService     :: String }
@@ -61,6 +64,7 @@ module System.Term ( initialize ) where
                               , port      = def &= typ "PORT" &= help "port number to listen to, defaults to 80 for http and 443 for https"
                               , forward   = def &= typ "PORT" &= help "the port to forward to (in case of a port-forwarding server)"
                               , ssl       = False &= help "create a letsencrypt certificate for this domain, defaults to false"
+                              , email     = def &= help "email required for registering your certificate"
                               , wService  = "nginx" &= help "service to build config for: nginx, defaults to nginx" &= explicit &= name "service"
                               } &= explicit &= name "webserver"
 
@@ -72,7 +76,9 @@ module System.Term ( initialize ) where
   install = InstallParams { iService = def &= argPos 0
                           } &= explicit &= name "install"
 
-  webserverSetup (WebServerParams { directory, domain, port, ssl, forward, wService }) = do
+  webserverSetup (WebServerParams { directory, domain, port, ssl, forward, wService, email }) = do
+    when (ssl && null email) $ die "Email is required for generating a certificate"
+
     let serverType 
           | (not . null) forward = S.PortForwarding
           | otherwise = S.Static
@@ -93,6 +99,7 @@ module System.Term ( initialize ) where
                                 , S.forward       = forward
                                 , S.serverType    = serverType
                                 , S.serverService = serviceName
+                                , S.email         = email
                                 }
     S.run $ S.detectOS >>= (S.install serviceName) >> S.newServer params
 
