@@ -51,7 +51,7 @@ module System.Serverman.Actions.Nginx (nginx) where
             putStrLn $ "you should use letsencrypt to create a certificate for your domain"
             putStrLn $ "and put it in /etc/letsencrypt/live/" ++ domain ++ "/fullchain.pem"
             putStrLn $ "my suggestion is running this command:"
-            putStrLn $ "sudo certbot certonly --webroot --webroot-path <YOUR_APPLICATION_DIRECTORY> -d " ++ domain 
+            putStrLn $ "sudo letsencrypt certonly --webroot --webroot-path <YOUR_APPLICATION_DIRECTORY> -d " ++ domain 
 
         putStrLn $ "for more information, see: https://certbot.eff.org/"
       return ()
@@ -64,7 +64,7 @@ module System.Serverman.Actions.Nginx (nginx) where
             putStrLn $ "restarted " ++ show serverService
 
       createCert path cmd = do
-        result <- execute cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain, "--email", email] "" False
+        result <- execute cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain, "--email", email, "--agree-tos"] "" False
         case result of
           Left _ -> if cmd == "letsencrypt" then createCert path "certbot" else return ()
           Right stdout -> do
