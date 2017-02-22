@@ -42,12 +42,16 @@ module System.Serverman.Actions.Nginx (nginx) where
       wait =<< restart
 
       when ssl $ do
+        let dhparamPath = "/etc/ssl/certs/dhparam.pem"
+        dhExists <- doesFileExist dhparamPath
+
+        when (not dhExists) $ do
+          dhparam <- async $ execute "openssl" ["dhparam", "-out", dhparamPath, "2048"] "" True
+          wait dhparam
+          return ()
+
         case serverType of
           Static -> do
-            dhparam <- async $ execute "openssl" ["dhparam", "-out", "/etc/ssl/certs/dhparam.pem", "2048"] "" True
-
-            wait dhparam
-
             letsencrypt <- async $ createCert path "letsencrypt"
               
             wait letsencrypt
