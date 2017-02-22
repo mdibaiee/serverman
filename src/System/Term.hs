@@ -8,6 +8,7 @@ module System.Term ( initialize ) where
   import System.Console.CmdArgs
   import qualified System.Console.CmdArgs.Explicit as E
   import System.Environment
+  import System.Directory
   import Data.Monoid
   import Data.Maybe
 
@@ -83,7 +84,9 @@ module System.Term ( initialize ) where
           | ssl = "403"
           | otherwise = "80"
 
-    let params = S.ServerParams { S.directory     = directory
+    absoluteDirectory <- makeAbsolute directory
+
+    let params = S.ServerParams { S.directory     = absoluteDirectory
                                 , S.domain        = domain
                                 , S.port          = portNumber
                                 , S.ssl           = ssl
