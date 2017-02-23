@@ -1,4 +1,4 @@
-module System.Serverman.Actions.Install (installService) where
+module System.Serverman.Actions.Install (installService, package, dependencies) where
   import System.Serverman.Action
   import System.Serverman.Utils
   import System.Serverman.Services
@@ -19,11 +19,16 @@ module System.Serverman.Actions.Install (installService) where
     dependencies NGINX = [LetsEncrypt]
     dependencies _ = []
 
-    package NGINX _ = "nginx"
-    package MySQL _ = "mysql"
-
     package LetsEncrypt Arch = "certbot"
     package LetsEncrypt _ = "letsencrypt"
+
+    package NGINX _ = "nginx"
+
+    package MySQL _ = "mysql"
+
+    package MongoDB _ = "mongodb"
+
+    package VsFTPd _ = "vsftpd"
 
   installService :: Service -> OS -> IO ()
   installService service os = do
@@ -37,7 +42,7 @@ module System.Serverman.Actions.Install (installService) where
         pkg = package service os
 
     process <- async $ do
-      result <- execute (fst base) (snd base ++ [pkg]) "" True
+      result <- executeRoot (fst base) (snd base ++ [pkg]) "" True
 
       case result of
         Left err -> return ()

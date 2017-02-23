@@ -21,6 +21,12 @@ module System.Term ( initialize ) where
                            &= summary "serverman v0.1.0, (C) Mahdi Dibaiee 2017"
                            &= helpArg [name "h"]
 
+    user <- getEnv "USER"
+
+    when (user == "ROOT") $ do
+      putStrLn $ "It's recommended that you don't run serverman as root."
+      putStrLn $ "Serverman will automatically use sudo whenever needed."
+
     let fixArgs
                   | null args = ["--help"]
                   | otherwise = args
@@ -53,7 +59,12 @@ module System.Term ( initialize ) where
                                 , email     :: String
                                 }
               | DatabaseParams { databaseName :: String
-                               , dService     :: String }
+                               , dService     :: String
+                               , dummyData    :: Bool
+                               , dUser        :: String
+                               , dPass        :: String
+                               , dHost        :: String
+                               }
 
               | InstallParams { iService :: String }
 
@@ -70,6 +81,10 @@ module System.Term ( initialize ) where
 
   database = DatabaseParams { databaseName = "test" &= help "database name, defaults to test" &= explicit &= name "name"
                             , dService     = "mysql" &= help "service to setup: mysql, defaults to mysql" &= explicit &= name "service"
+                            , dummyData    = False &= help "generate dummy data in the database" &= explicit &= name "dummy-data"
+                            , dUser        = "root" &= help "database's username, defaults to root" &= explicit &= name "user"
+                            , dPass        = "" &= help "database's password, defaults to blank string" &= explicit &= name "password"
+                            , dHost        = "127.0.0.1" &= help "database's host, defaults to localhost" &= explicit &= name "host"
                             } &= explicit &= name "database"
 
 
@@ -101,16 +116,29 @@ module System.Term ( initialize ) where
                                 , S.serverService = serviceName
                                 , S.email         = email
                                 }
-    S.run $ S.detectOS >>= (S.install serviceName) >> S.newServer params
+    S.run $ S.detectOS >>= (S.install serviceName)
+         >> S.detectOS >>= (S.start serviceName)
+         >> S.newServer params
 
   manualInstall (InstallParams { iService }) = do
-    S.run $ S.detectOS >>= (S.install (read iService))
+    let serviceName = read iService :: Service
 
-  databaseSetup (DatabaseParams { databaseName, dService }) = do
+    S.run $ S.detectOS >>= (S.install serviceName)
+         >> S.detectOS >>= (S.start serviceName)
+    
+
+  databaseSetup (DatabaseParams { databaseName, dService, dummyData, dUser, dPass, dHost }) = do
     let serviceName = read dService
 
     let params = S.DatabaseParams { S.database = databaseName
-                                  , S.databaseService = serviceName }
+                                  , S.databaseService = serviceName
+                                  , S.dummyData = dummyData
+                                  , S.databaseUser = dUser
+                                  , S.databasePass = dPass
+                                  , S.databaseHost = dHost
+                                  }
 
-    S.run $ S.detectOS >>= (S.install serviceName) >> S.newDatabase params
+    S.run $ S.detectOS >>= (S.install serviceName)
+         >> S.detectOS >>= (S.start serviceName)
+         >> S.newDatabase params
 

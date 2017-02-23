@@ -46,7 +46,7 @@ module System.Serverman.Actions.Nginx (nginx) where
         dhExists <- doesFileExist dhparamPath
 
         when (not dhExists) $ do
-          dhparam <- async $ execute "openssl" ["dhparam", "-out", dhparamPath, "2048"] "" True
+          dhparam <- async $ executeRoot "openssl" ["dhparam", "-out", dhparamPath, "2048"] "" True
           wait dhparam
           return ()
 
@@ -65,14 +65,14 @@ module System.Serverman.Actions.Nginx (nginx) where
       return ()
     where
       restart = async $ do
-        result <- execute "systemctl" ["restart", "nginx"] "" True
+        result <- executeRoot "systemctl" ["restart", "nginx"] "" True
         case result of
           Left err -> return ()
           Right _ ->
             putStrLn $ "restarted " ++ show serverService
 
       createCert path cmd = do
-        result <- execute cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain, "--email", email, "--agree-tos", "-n"] "" False
+        result <- executeRoot cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain, "--email", email, "--agree-tos", "-n"] "" False
         case result of
           Left _ -> if cmd == "letsencrypt" then createCert path "certbot" else return ()
           Right stdout -> do

@@ -4,7 +4,8 @@ module System.Serverman.Utils ( keyvalue
                               , writeFileIfMissing
                               , commandError
                               , appendAfter
-                              , execute) where
+                              , execute
+                              , executeRoot) where
 
   import System.IO
   import Control.Monad
@@ -14,6 +15,7 @@ module System.Serverman.Utils ( keyvalue
   import Control.Concurrent.Async
   import Data.List
   import Control.Exception
+  import System.Exit
 
   keyvalue :: [(String, String)] -> String
   keyvalue ((a, b):xs) = a ++ " " ++ b ++ ";\n" ++ keyvalue xs
@@ -50,9 +52,22 @@ module System.Serverman.Utils ( keyvalue
       result <- tryIOError $ readProcessWithExitCode cmd args stdin
 
       case result of
-         Right (_, stdout, _) -> return $ Right stdout
+         Right (ExitSuccess, stdout, _) -> return $ Right stdout
+
+         Right (ExitFailure code, stdout, stderr) -> do
+           when logErrors $ do
+             putStrLn $ "exit code: " ++ show code
+             putStrLn stdout
+             putStrLn stderr
+             putStrLn $ commandError command
+           return $ Left stdout
          Left err -> do
-           when logErrors $ putStrLn (commandError command)
+           when logErrors $ do
+             putStrLn $ show err
+             putStrLn $ commandError command
            return $ Left (show err)
 
     wait process
+
+  executeRoot :: String -> [String] -> String -> Bool -> IO (Either String String)
+  executeRoot cmd args stdin logErrors = execute "sudo" (cmd:args) stdin logErrors

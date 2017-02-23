@@ -3,6 +3,8 @@ module System.Serverman.Services ( Service(..)
 
   data Service = NGINX
                | MySQL
+               | MongoDB
+               | VsFTPd
                | LetsEncrypt
                  deriving (Eq, Show)
 
@@ -11,10 +13,14 @@ module System.Serverman.Services ( Service(..)
 
   instance Configurable Service where
     configDirectory NGINX = "/etc/nginx/"
-    configDirectory mysql = "/etc/mysql/"
+    configDirectory MySQL = "/etc/mysql/"
+    configDirectory MongoDB = "/etc/mongodb"
+    configDirectory VsFTPd = "/etc/vsftpd"
 
   instance Read Service where
     readsPrec _ service
           | service == "nginx" = [(NGINX, [])]
           | service == "mysql" = [(MySQL, [])]
+          | service == "mongodb" = [(MongoDB, [])]
+          | service == "vsftpd" = [(VsFTPd, [])]
           | service == "letsencrypt" = [(LetsEncrypt, [])]
