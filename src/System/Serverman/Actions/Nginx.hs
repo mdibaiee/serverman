@@ -16,14 +16,14 @@ module System.Serverman.Actions.Nginx (nginx) where
   import Data.List
 
   nginx :: ServerParams -> IO ()
-  nginx params@(ServerParams { ssl, serverService, domain, directory, serverType, email }) = 
+  nginx params@(ServerParams { ssl, serverService, domain, wDirectory, serverType, email }) = 
     do
       -- Turn SSL off at first, because we have not yet received a certificate
       let content = show (params { ssl = False, port = "80" })
           mainConfig = configDirectory serverService </> "nginx.conf"
           parent = configDirectory serverService </> "serverman-configs"
           path = parent </> domain
-          targetDir = directory
+          targetDir = wDirectory
 
       createDirectoryIfMissing True targetDir
       createDirectoryIfMissing True parent
@@ -65,14 +65,14 @@ module System.Serverman.Actions.Nginx (nginx) where
       return ()
     where
       restart = async $ do
-        result <- executeRoot "systemctl" ["restart", "nginx"] "" True
+        result <- restartService "nginx"
         case result of
           Left err -> return ()
           Right _ ->
             putStrLn $ "restarted " ++ show serverService
 
       createCert path cmd = do
-        result <- executeRoot cmd ["certonly", "--webroot", "--webroot-path", directory, "-d", domain, "--email", email, "--agree-tos", "-n"] "" False
+        result <- executeRoot cmd ["certonly", "--webroot", "--webroot-path", wDirectory, "-d", domain, "--email", email, "--agree-tos", "-n"] "" False
         case result of
           Left _ -> if cmd == "letsencrypt" then createCert path "certbot" else return ()
           Right stdout -> do

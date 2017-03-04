@@ -16,16 +16,16 @@ module System.Term ( initialize ) where
 
   initialize = do
     args <- getArgs
-    let mode = cmdArgsMode $ modes [install, webserver, database] 
+    let mode = cmdArgsMode $ modes [install, webserver, database, filesharing] 
                            &= program "serverman"
                            &= summary "serverman v0.1.0, (C) Mahdi Dibaiee 2017"
                            &= helpArg [name "h"]
 
     user <- getEnv "USER"
 
-    when (user == "ROOT") $ do
-      putStrLn $ "It's recommended that you don't run serverman as root."
-      putStrLn $ "Serverman will automatically use sudo whenever needed."
+    {-when (user == "ROOT") $ do-}
+      {-putStrLn $ "It's recommended that you don't run serverman as root."-}
+      {-putStrLn $ "Serverman will automatically use sudo whenever needed."-}
 
     let fixArgs
                   | null args = ["--help"]
@@ -41,9 +41,10 @@ module System.Term ( initialize ) where
           putStrLn $ fromJust version
         else
           case args of
-            p@(WebServerParams {}) -> webserverSetup p
-            p@(InstallParams {})   -> manualInstall p
-            p@(DatabaseParams {})  -> databaseSetup p
+            p@(WebServerParams {})   -> webserverSetup p
+            p@(InstallParams {})     -> manualInstall p
+            p@(DatabaseParams {})    -> databaseSetup p
+            p@(FileSharingParams {}) -> fileSharingSetup p
       Left err ->
         print err
 
@@ -66,6 +67,17 @@ module System.Term ( initialize ) where
                                , dHost        :: String
                                }
 
+              | FileSharingParams { fDirectory      :: String
+                                  , fUser           :: String
+                                  , fPass           :: String
+                                  , fPort           :: String
+                                  , fWritable       :: Bool
+                                  , fAnonymous      :: Bool
+                                  , fAnonymousWrite :: Bool
+                                  , fRecreateUser   :: Bool
+                                  , fService        :: String
+                                  }
+
               | InstallParams { iService :: String }
 
               deriving (Show, Data, Typeable)
@@ -87,6 +99,17 @@ module System.Term ( initialize ) where
                             , dHost        = "127.0.0.1" &= help "database's host, defaults to localhost" &= explicit &= name "host"
                             } &= explicit &= name "database"
 
+  filesharing = FileSharingParams { fDirectory      = "/srv/ftp/" &= typDir &= help "directory to share, defaults to /srv/ftp/" &= explicit &= name "directory"
+                                  , fUser           = "serverman" &= typDir &= help "username, defaults to serverman" &= explicit &= name "user"
+                                  , fPass           = "" &= help "password, defaults to serverman (please change this to avoid security risks)" &= explicit &= name "password"
+                                  , fAnonymous      = False &= help "allow anonymous connections, defaults to False" &= explicit &= name "anonymous"
+                                  , fAnonymousWrite = False &= help "allow anonymous write operations, defaults to False" &= explicit &= name "anonymous-write"
+                                  , fWritable       = True &= help "allow write operations, defaults to True" &= explicit &= name "writable"
+                                  , fPort           = "21" &= help "service port, defaults to 21" &= explicit &= name "port"
+                                  , fService        = "vsftpd" &= help "service to use for file sharing, defaults to vsftpd" &= explicit &= name "service"
+                                  , fRecreateUser   = False &= help "recreate the user" &= explicit &= name "recreate-user"
+                                  } &= explicit &= name "filesharing"
+
 
   install = InstallParams { iService = def &= argPos 0
                           } &= explicit &= name "install"
@@ -107,7 +130,7 @@ module System.Term ( initialize ) where
 
     absoluteDirectory <- makeAbsolute directory
 
-    let params = S.ServerParams { S.directory     = absoluteDirectory
+    let params = S.ServerParams { S.wDirectory    = absoluteDirectory
                                 , S.domain        = domain
                                 , S.port          = portNumber
                                 , S.ssl           = ssl
@@ -130,15 +153,33 @@ module System.Term ( initialize ) where
   databaseSetup (DatabaseParams { databaseName, dService, dummyData, dUser, dPass, dHost }) = do
     let serviceName = read dService
 
-    let params = S.DatabaseParams { S.database = databaseName
+    let params = S.DatabaseParams { S.database        = databaseName
                                   , S.databaseService = serviceName
-                                  , S.dummyData = dummyData
-                                  , S.databaseUser = dUser
-                                  , S.databasePass = dPass
-                                  , S.databaseHost = dHost
+                                  , S.dummyData       = dummyData
+                                  , S.databaseUser    = dUser
+                                  , S.databasePass    = dPass
+                                  , S.databaseHost    = dHost
                                   }
 
     S.run $ S.detectOS >>= (S.install serviceName)
          >> S.detectOS >>= (S.start serviceName)
          >> S.newDatabase params
+
+  fileSharingSetup (FileSharingParams { fDirectory, fUser, fPass, fPort, fAnonymous, fAnonymousWrite, fWritable, fService, fRecreateUser }) = do
+    let serviceName = read fService
+
+    let params = S.FileSharingParams { S.fDirectory      = fDirectory
+                                     , S.fUser           = fUser
+                                     , S.fPass           = fPass
+                                     , S.fPort           = fPort
+                                     , S.fAnonymous      = fAnonymous
+                                     , S.fAnonymousWrite = fAnonymousWrite
+                                     , S.fWritable       = fWritable
+                                     , S.fService        = serviceName
+                                     , S.fRecreateUser   = fRecreateUser
+                                     }
+
+    S.run $ S.detectOS >>= (S.install serviceName)
+         >> S.detectOS >>= (S.start serviceName)
+         >> S.newFileSharing params
 

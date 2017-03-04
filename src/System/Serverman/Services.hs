@@ -15,7 +15,7 @@ module System.Serverman.Services ( Service(..)
     configDirectory NGINX = "/etc/nginx/"
     configDirectory MySQL = "/etc/mysql/"
     configDirectory MongoDB = "/etc/mongodb"
-    configDirectory VsFTPd = "/etc/vsftpd"
+    configDirectory VsFTPd = "/etc/vsftpd.conf"
 
   instance Read Service where
     readsPrec _ service

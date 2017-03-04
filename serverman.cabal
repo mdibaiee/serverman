@@ -19,11 +19,17 @@ library
                      , System.Serverman
                      , System.Serverman.Utils
                      , System.Serverman.Action
+                     
                      , System.Serverman.Actions.WebServer
                      , System.Serverman.Actions.Nginx
+
                      , System.Serverman.Actions.Database
                      , System.Serverman.Actions.MySQL
                      , System.Serverman.Actions.MongoDB
+
+                     , System.Serverman.Actions.FileSharing
+                     , System.Serverman.Actions.VsFTPd
+
                      , System.Serverman.Actions.Install
                      , System.Serverman.Actions.Env
                      , System.Serverman.Actions.Start

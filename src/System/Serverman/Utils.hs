@@ -1,10 +1,13 @@
 module System.Serverman.Utils ( keyvalue
+                              , semicolon
                               , block
                               , indent
                               , writeFileIfMissing
+                              , renameFileIfMissing
                               , commandError
                               , appendAfter
                               , execute
+                              , restartService
                               , executeRoot) where
 
   import System.IO
@@ -17,9 +20,12 @@ module System.Serverman.Utils ( keyvalue
   import Control.Exception
   import System.Exit
 
-  keyvalue :: [(String, String)] -> String
-  keyvalue ((a, b):xs) = a ++ " " ++ b ++ ";\n" ++ keyvalue xs
-  keyvalue [] = ""
+  keyvalue :: [(String, String)] -> String -> String
+  keyvalue ((a, b):xs) delimit = a ++ delimit ++ b ++ "\n" ++ keyvalue xs delimit
+  keyvalue [] _ = ""
+
+  semicolon :: String -> String
+  semicolon text = unlines $ map (++ ";") (lines text)
 
   block :: String -> String -> String
   block blockName content = blockName ++ " {\n" ++ indent content ++ "}"
@@ -30,6 +36,13 @@ module System.Serverman.Utils ( keyvalue
     
     when (not exists) $ do
       writeFile path content
+
+  renameFileIfMissing :: FilePath -> String -> IO ()
+  renameFileIfMissing path content = do
+    exists <- doesFileExist path
+    
+    when (not exists) $ do
+      renameFile path content
 
   appendAfter :: String -> String -> String -> String
   appendAfter content after line =
@@ -68,6 +81,9 @@ module System.Serverman.Utils ( keyvalue
            return $ Left (show err)
 
     wait process
+
+  restartService :: String -> IO (Either String String)
+  restartService service = executeRoot "systemctl" ["restart", service] "" True
 
   executeRoot :: String -> [String] -> String -> Bool -> IO (Either String String)
   executeRoot cmd args stdin logErrors = execute "sudo" (cmd:args) stdin logErrors

@@ -36,7 +36,7 @@ module System.Serverman.Action ( ActionF(..)
   instance Functor ActionF where
     fmap f (NewWebServer params x) = NewWebServer params (f x)
     fmap f (NewDatabase params x) = NewDatabase params (f x)
-    fmap f (NewSharedFolder params x) = NewSharedFolder params (f x)
+    fmap f (NewFileSharing params x) = NewFileSharing params (f x)
     fmap f (Install service os x) = Install service os (f x)
     fmap f (Start service os x) = Start service os (f x)
     fmap f (DetectOS x) = DetectOS (f . x)
