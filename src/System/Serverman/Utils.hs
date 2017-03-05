@@ -6,6 +6,7 @@ module System.Serverman.Utils ( keyvalue
                               , renameFileIfMissing
                               , commandError
                               , appendAfter
+                              , exec
                               , execute
                               , restartService
                               , executeRoot) where
@@ -58,11 +59,15 @@ module System.Serverman.Utils ( keyvalue
   commandError command = "[Error] an error occured while running: " ++ command ++ "\nplease try running the command manually."
 
   execute :: String -> [String] -> String -> Bool -> IO (Either String String)
-  execute cmd args stdin logErrors = do
+  execute cmd args stdin logErrors = exec cmd args stdin Nothing logErrors
+
+  exec :: String -> [String] -> String -> Maybe FilePath -> Bool -> IO (Either String String)
+  exec cmd args stdin cwd logErrors = do
     let command = cmd ++ " " ++ intercalate " " args
+        cp = (proc cmd args) { cwd = cwd }
 
     process <- async $ do
-      result <- tryIOError $ readProcessWithExitCode cmd args stdin
+      result <- tryIOError $ readCreateProcessWithExitCode cp stdin
 
       case result of
          Right (ExitSuccess, stdout, _) -> return $ Right stdout

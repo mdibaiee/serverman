@@ -33,6 +33,7 @@ library
                      , System.Serverman.Actions.Install
                      , System.Serverman.Actions.Env
                      , System.Serverman.Actions.Start
+                     , System.Serverman.Actions.Remote
                      , System.Serverman.Services
   build-depends:       base >= 4.7 && < 5
                      , free >= 4.12.4 && < 5

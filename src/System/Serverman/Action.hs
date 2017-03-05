@@ -7,12 +7,14 @@ module System.Serverman.Action ( ActionF(..)
                                , newFileSharing
                                , start
                                , install
+                               , remote
                                , detectOS) where
 
   import System.Serverman.Actions.WebServer
   import System.Serverman.Actions.FileSharing
   import System.Serverman.Actions.Database
   import System.Serverman.Actions.Env
+  import System.Serverman.Actions.Remote
   import System.Serverman.Utils
   import System.Serverman.Services
 
@@ -31,6 +33,7 @@ module System.Serverman.Action ( ActionF(..)
                  | NewFileSharing FileSharingParams x
                  | DetectOS (OS -> x)
                  | Install Service OS x
+                 | Remote [Address] (Action ()) x
                  | Start Service OS x
 
   instance Functor ActionF where
@@ -40,6 +43,7 @@ module System.Serverman.Action ( ActionF(..)
     fmap f (Install service os x) = Install service os (f x)
     fmap f (Start service os x) = Start service os (f x)
     fmap f (DetectOS x) = DetectOS (f . x)
+    fmap f (Remote addr action x) = Remote addr action (f x)
 
   type Action = Free ActionF
 
@@ -60,3 +64,6 @@ module System.Serverman.Action ( ActionF(..)
 
   detectOS :: Action OS
   detectOS = liftF $ DetectOS id
+
+  remote :: [Address] -> Action () -> Action ()
+  remote addrs action = liftF $ Remote addrs action ()

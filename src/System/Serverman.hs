@@ -15,6 +15,7 @@ module System.Serverman ( run
   import System.Serverman.Actions.Env
   import System.Serverman.Actions.Install
   import System.Serverman.Actions.Start
+  import System.Serverman.Actions.Remote
 
   import System.Serverman.Actions.WebServer
   import System.Serverman.Actions.Nginx
@@ -47,4 +48,5 @@ module System.Serverman ( run
     | fService params == VsFTPd = vsftpd params >> run next
     | otherwise = run next
 
+  run (Free (Remote addrs action next)) = mapM_ (\addr -> runRemotely addr (run action)) addrs >> run next
 

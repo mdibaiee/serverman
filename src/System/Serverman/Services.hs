@@ -6,6 +6,7 @@ module System.Serverman.Services ( Service(..)
                | MongoDB
                | VsFTPd
                | LetsEncrypt
+               | SSHFs
                  deriving (Eq, Show)
 
   class Configurable a where
@@ -24,3 +25,4 @@ module System.Serverman.Services ( Service(..)
           | service == "mongodb" = [(MongoDB, [])]
           | service == "vsftpd" = [(VsFTPd, [])]
           | service == "letsencrypt" = [(LetsEncrypt, [])]
+          | service == "sshfs" = [(SSHFs, [])]

@@ -30,6 +30,8 @@ module System.Serverman.Actions.Install (installService, package, dependencies) 
 
     package VsFTPd _ = "vsftpd"
 
+    package SSHFs _ = "sshfs"
+
   installService :: Service -> OS -> IO ()
   installService service os = do
     forM_ (dependencies service) (`installService` os) 
