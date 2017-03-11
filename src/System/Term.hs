@@ -13,6 +13,7 @@ module System.Term ( initialize ) where
   import Data.Monoid
   import Data.Maybe
   import Control.Monad
+  import Control.Monad.State
 
   initialize = do
     args <- getArgs
@@ -58,6 +59,7 @@ module System.Term ( initialize ) where
                                 , wService  :: String
                                 , ssl       :: Bool
                                 , email     :: String
+                                , wRemote   :: String
                                 }
               | DatabaseParams { databaseName :: String
                                , dService     :: String
@@ -65,6 +67,7 @@ module System.Term ( initialize ) where
                                , dUser        :: String
                                , dPass        :: String
                                , dHost        :: String
+                               , dRemote      :: String
                                }
 
               | FileSharingParams { fDirectory      :: String
@@ -76,9 +79,10 @@ module System.Term ( initialize ) where
                                   , fAnonymousWrite :: Bool
                                   , fRecreateUser   :: Bool
                                   , fService        :: String
+                                  , fRemote         :: String
                                   }
 
-              | InstallParams { iService :: String }
+              | InstallParams { iService :: String, remote :: String }
 
               deriving (Show, Data, Typeable)
 
@@ -89,6 +93,7 @@ module System.Term ( initialize ) where
                               , ssl       = False &= help "create a letsencrypt certificate for this domain, defaults to false"
                               , email     = def &= help "email required for registering your certificate"
                               , wService  = "nginx" &= help "service to build config for: nginx, defaults to nginx" &= explicit &= name "service"
+                              , wRemote = def &= help "path to the file containing list of remote addresses in the format: user@host:port"
                               } &= explicit &= name "webserver"
 
   database = DatabaseParams { databaseName = "test" &= help "database name, defaults to test" &= explicit &= name "name"
@@ -97,6 +102,7 @@ module System.Term ( initialize ) where
                             , dUser        = "root" &= help "database's username, defaults to root" &= explicit &= name "user"
                             , dPass        = "" &= help "database's password, defaults to blank string" &= explicit &= name "password"
                             , dHost        = "127.0.0.1" &= help "database's host, defaults to localhost" &= explicit &= name "host"
+                            , dRemote = def &= help "path to the file containing list of remote addresses in the format: user@host:port"
                             } &= explicit &= name "database"
 
   filesharing = FileSharingParams { fDirectory      = "/srv/ftp/" &= typDir &= help "directory to share, defaults to /srv/ftp/" &= explicit &= name "directory"
@@ -108,78 +114,99 @@ module System.Term ( initialize ) where
                                   , fPort           = "21" &= help "service port, defaults to 21" &= explicit &= name "port"
                                   , fService        = "vsftpd" &= help "service to use for file sharing, defaults to vsftpd" &= explicit &= name "service"
                                   , fRecreateUser   = False &= help "recreate the user" &= explicit &= name "recreate-user"
+                                  , fRemote = def &= help "path to the file containing list of remote addresses in the format: user@host:port"
                                   } &= explicit &= name "filesharing"
 
 
   install = InstallParams { iService = def &= argPos 0
+                          , remote = def &= help "path to the file containing list of remote addresses in the format: user@host:port"
                           } &= explicit &= name "install"
 
-  webserverSetup (WebServerParams { directory, domain, port, ssl, forward, wService, email }) = do
-    when (ssl && null email) $ die "Email is required for generating a certificate"
+  webserverSetup (WebServerParams { directory, domain, port, ssl, forward, wService, email, wRemote }) = do
+    remoteSetup wRemote $ do
+      when (ssl && null email) $ die "Email is required for generating a certificate"
 
-    let serverType 
-          | (not . null) forward = S.PortForwarding
-          | otherwise = S.Static
+      let serverType 
+            | (not . null) forward = S.PortForwarding
+            | otherwise = S.Static
 
-    let serviceName = read wService :: Service
+      let serviceName = read wService :: Service
 
-    let portNumber
-          | (not . null) port = port
-          | ssl = "443"
-          | otherwise = "80"
+      let portNumber
+            | (not . null) port = port
+            | ssl = "443"
+            | otherwise = "80"
 
-    absoluteDirectory <- makeAbsolute directory
+      absoluteDirectory <- makeAbsolute directory
 
-    let params = S.ServerParams { S.wDirectory    = absoluteDirectory
-                                , S.domain        = domain
-                                , S.port          = portNumber
-                                , S.ssl           = ssl
-                                , S.forward       = forward
-                                , S.serverType    = serverType
-                                , S.serverService = serviceName
-                                , S.email         = email
-                                }
-    S.run $ S.detectOS >>= (S.install serviceName)
-         >> S.detectOS >>= (S.start serviceName)
-         >> S.newServer params
+      let params = S.ServerParams { S.wDirectory    = absoluteDirectory
+                                  , S.domain        = domain
+                                  , S.port          = portNumber
+                                  , S.ssl           = ssl
+                                  , S.forward       = forward
+                                  , S.serverType    = serverType
+                                  , S.serverService = serviceName
+                                  , S.email         = email
+                                  }
+      return $ S.detectOS >>= (S.install serviceName)
+            >> S.detectOS >>= (S.start serviceName)
+            >> S.newServer params
 
-  manualInstall (InstallParams { iService }) = do
-    let serviceName = read iService :: Service
+  manualInstall (InstallParams { iService, remote }) =
+    remoteSetup remote $ do
+      let serviceName = read iService :: Service
 
-    S.run $ S.detectOS >>= (S.install serviceName)
-         >> S.detectOS >>= (S.start serviceName)
+      return $ S.detectOS >>= (S.install serviceName)
+             >> S.detectOS >>= (S.start serviceName)
     
 
-  databaseSetup (DatabaseParams { databaseName, dService, dummyData, dUser, dPass, dHost }) = do
-    let serviceName = read dService
+  databaseSetup (DatabaseParams { databaseName, dService, dummyData, dUser, dPass, dHost, dRemote }) = do
+    remoteSetup dRemote $ do
+      let serviceName = read dService
 
-    let params = S.DatabaseParams { S.database        = databaseName
-                                  , S.databaseService = serviceName
-                                  , S.dummyData       = dummyData
-                                  , S.databaseUser    = dUser
-                                  , S.databasePass    = dPass
-                                  , S.databaseHost    = dHost
-                                  }
+      let params = S.DatabaseParams { S.database        = databaseName
+                                    , S.databaseService = serviceName
+                                    , S.dummyData       = dummyData
+                                    , S.databaseUser    = dUser
+                                    , S.databasePass    = dPass
+                                    , S.databaseHost    = dHost
+                                    }
 
-    S.run $ S.detectOS >>= (S.install serviceName)
-         >> S.detectOS >>= (S.start serviceName)
-         >> S.newDatabase params
+      return $ S.detectOS >>= (S.install serviceName)
+            >> S.detectOS >>= (S.start serviceName)
+            >> S.newDatabase params
 
-  fileSharingSetup (FileSharingParams { fDirectory, fUser, fPass, fPort, fAnonymous, fAnonymousWrite, fWritable, fService, fRecreateUser }) = do
-    let serviceName = read fService
+  fileSharingSetup (FileSharingParams { fDirectory, fUser, fPass, fPort, fAnonymous, fAnonymousWrite, fWritable, fService, fRecreateUser, fRemote }) = do
+    remoteSetup fRemote $ do
+      let serviceName = read fService
 
-    let params = S.FileSharingParams { S.fDirectory      = fDirectory
-                                     , S.fUser           = fUser
-                                     , S.fPass           = fPass
-                                     , S.fPort           = fPort
-                                     , S.fAnonymous      = fAnonymous
-                                     , S.fAnonymousWrite = fAnonymousWrite
-                                     , S.fWritable       = fWritable
-                                     , S.fService        = serviceName
-                                     , S.fRecreateUser   = fRecreateUser
-                                     }
+      let params = S.FileSharingParams { S.fDirectory      = fDirectory
+                                      , S.fUser           = fUser
+                                      , S.fPass           = fPass
+                                      , S.fPort           = fPort
+                                      , S.fAnonymous      = fAnonymous
+                                      , S.fAnonymousWrite = fAnonymousWrite
+                                      , S.fWritable       = fWritable
+                                      , S.fService        = serviceName
+                                      , S.fRecreateUser   = fRecreateUser
+                                      }
 
-    S.run $ S.detectOS >>= (S.install serviceName)
-         >> S.detectOS >>= (S.start serviceName)
-         >> S.newFileSharing params
+      return $ S.detectOS >>= (S.install serviceName)
+            >> S.detectOS >>= (S.start serviceName)
+            >> S.newFileSharing params
 
+  remoteSetup file generateAction
+    | null file = do
+      action <- generateAction
+      S.runApp $
+        S.run action
+
+      return ()
+
+    | otherwise = do
+      list <- liftIO $ map read . lines <$> readFile file
+      action <- generateAction
+      S.runApp $ S.run $ S.remote list action
+
+      return ()
+ 

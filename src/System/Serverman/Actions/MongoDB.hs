@@ -8,10 +8,11 @@ module System.Serverman.Actions.MongoDB (mongodb) where
   import Data.List hiding (delete)
   import qualified Data.Text as T
   import Control.Monad
+  import Control.Monad.State
   import System.IO.Error
 
-  mongodb :: DatabaseParams -> IO ()
-  mongodb (DatabaseParams { database, dummyData, databaseHost }) = do
+  mongodb :: DatabaseParams -> App ()
+  mongodb (DatabaseParams { database, dummyData, databaseHost }) = liftIO $ do
     result <- tryIOError $ connect (readHostPort databaseHost)
 
     case result of

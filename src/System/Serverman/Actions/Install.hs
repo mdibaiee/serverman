@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module System.Serverman.Actions.Install (installService, package, dependencies) where
   import System.Serverman.Action
   import System.Serverman.Utils
@@ -8,8 +10,9 @@ module System.Serverman.Actions.Install (installService, package, dependencies) 
   import System.IO.Error
   import System.Process
   import Control.Concurrent.Async
-  import Control.Monad.Free
   import Control.Monad
+  import Control.Monad.State
+  import Control.Monad.Trans.Control
 
   class Installable a where
     dependencies :: a -> [a]
@@ -32,7 +35,7 @@ module System.Serverman.Actions.Install (installService, package, dependencies) 
 
     package SSHFs _ = "sshfs"
 
-  installService :: Service -> OS -> IO ()
+  installService :: Service -> OS -> App ()
   installService service os = do
     forM_ (dependencies service) (`installService` os) 
 
@@ -43,11 +46,13 @@ module System.Serverman.Actions.Install (installService, package, dependencies) 
           _ -> ("echo", ["Unknown operating system"])
         pkg = package service os
 
-    process <- async $ do
+    process <- liftedAsync $ do
       result <- executeRoot (fst base) (snd base ++ [pkg]) "" True
 
       case result of
         Left err -> return ()
         Right _ -> do
-          putStrLn $ "installed " ++ show service ++ "."
-    wait process
+          liftIO $ putStrLn $ "installed " ++ show service ++ "."
+      
+    liftIO $ wait process
+    return ()

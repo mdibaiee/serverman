@@ -4,6 +4,7 @@ module System.Serverman.Actions.Env (OS(..), getOS) where
   import Data.List
   import System.IO.Error
   import Data.Either
+  import Data.Char
 
   data OS = Debian | Arch | Mac | Unknown deriving (Show, Eq)
   
@@ -12,7 +13,7 @@ module System.Serverman.Actions.Env (OS(..), getOS) where
     deb_release <- execute "cat" ["/etc/lsb-release"] "" False
     mac_release <- execute "sw_vers" ["-productName"] "" False
 
-    let release = head $ rights [arch_release, deb_release, mac_release] 
+    let release = map toLower . head . rights $ [arch_release, deb_release, mac_release] 
         distro
             | or $ map (`isInfixOf` release) ["ubuntu", "debian", "raspbian"] = Debian
             | "arch" `isInfixOf` release = Arch

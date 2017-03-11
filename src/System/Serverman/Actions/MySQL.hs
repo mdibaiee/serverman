@@ -7,9 +7,10 @@ module System.Serverman.Actions.MySQL (mysql) where
   import qualified Data.ByteString.Char8 as BS
   import Data.List
   import Control.Monad
+  import Control.Monad.State
 
-  mysql :: DatabaseParams -> IO ()
-  mysql (DatabaseParams { database, dummyData, databaseUser, databasePass, databaseHost }) = do
+  mysql :: DatabaseParams -> App ()
+  mysql (DatabaseParams { database, dummyData, databaseUser, databasePass, databaseHost }) = liftIO $ do
     conn <- connect $ defaultConnectInfo { connectUser = databaseUser, connectPassword = databasePass, connectHost = databaseHost }
 
     query conn $ BS.pack ("CREATE DATABASE IF NOT EXISTS " ++ database)

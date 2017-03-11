@@ -48,6 +48,10 @@ library
                      , mongoDB >= 2.1.1.1 && < 3
                      , text
                      , bytestring
+                     , unix
+                     , Unixutils
+                     , mtl
+                     , monad-control
   default-language:    Haskell2010
 
 executable serverman

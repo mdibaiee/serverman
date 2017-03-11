@@ -15,8 +15,9 @@ module System.Serverman.Actions.VsFTPd (vsftpd) where
   import Control.Monad.Free
   import Data.List
   import Data.Either
+  import Control.Monad.State
 
-  vsftpd :: FileSharingParams -> IO ()
+  vsftpd :: FileSharingParams -> App ()
   vsftpd params@(FileSharingParams { fDirectory, fPort, fUser, fPass, fAnonymous, fAnonymousWrite, fWritable, fService, fRecreateUser }) =
     do
       let content = show params
@@ -30,14 +31,13 @@ module System.Serverman.Actions.VsFTPd (vsftpd) where
 
       executeRoot "useradd" [fUser, "-d", fDirectory, "-G", "ftp", "-p", encryptedPassword] "" True
 
-      renameFileIfMissing original (original ++ ".backup")
-      
-      writeFile original content
-
-      writeFile userList fUser
+      liftIO $ do
+        renameFileIfMissing original (original ++ ".backup")
+        writeFile original content
+        writeFile userList fUser
 
       result <- restartService "vsftpd"
       case result of
         Left err -> return ()
         Right _ ->
-          putStrLn $ "restarted " ++ show fService
+          liftIO $ putStrLn $ "restarted " ++ show fService

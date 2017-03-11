@@ -12,10 +12,11 @@ module System.Serverman.Actions.Nginx (nginx) where
   import System.Process
   import Control.Concurrent.Async
   import Control.Monad
+  import Control.Monad.State
   import Control.Monad.Free
   import Data.List
 
-  nginx :: ServerParams -> IO ()
+  nginx :: ServerParams -> App ()
   nginx params@(ServerParams { ssl, serverService, domain, wDirectory, serverType, email }) = 
     do
       -- Turn SSL off at first, because we have not yet received a certificate
@@ -25,62 +26,66 @@ module System.Serverman.Actions.Nginx (nginx) where
           path = parent </> domain
           targetDir = wDirectory
 
-      createDirectoryIfMissing True targetDir
-      createDirectoryIfMissing True parent
+      liftIO $ do
+        createDirectoryIfMissing True targetDir
+        createDirectoryIfMissing True parent
 
-      writeIncludeStatementIfMissing mainConfig parent
+        writeIncludeStatementIfMissing mainConfig parent
 
-      when ssl $ do
-        let sslPath = configDirectory serverService </> "ssl.conf"
-        writeFileIfMissing sslPath nginxSSL
-        putStrLn $ "wrote ssl configuration to " ++ sslPath
+        when ssl $ do
+          let sslPath = configDirectory serverService </> "ssl.conf"
+          writeFileIfMissing sslPath nginxSSL
+          putStrLn $ "wrote ssl configuration to " ++ sslPath
 
-      writeFile path content
+        writeFile path content
 
-      putStrLn $ "wrote your configuration file to " ++ path
-      
-      wait =<< restart
+        putStrLn $ "wrote your configuration file to " ++ path
+        
+      liftIO . wait =<< restart
 
       when ssl $ do
         let dhparamPath = "/etc/ssl/certs/dhparam.pem"
-        dhExists <- doesFileExist dhparamPath
+        dhExists <- liftIO $ doesFileExist dhparamPath
 
         when (not dhExists) $ do
-          dhparam <- async $ executeRoot "openssl" ["dhparam", "-out", dhparamPath, "2048"] "" True
-          wait dhparam
+          dhparam <- liftedAsync $ executeRoot "openssl" ["dhparam", "-out", dhparamPath, "2048"] "" True
+          liftIO $ wait dhparam
           return ()
 
         case serverType of
           Static -> do
-            letsencrypt <- async $ createCert path "letsencrypt"
+            letsencrypt <- liftedAsync $ createCert path "letsencrypt"
               
-            wait letsencrypt
-          _ -> do
+            liftIO $ wait letsencrypt
+            return ()
+          _ -> liftIO $ do
             putStrLn $ "you should use letsencrypt to create a certificate for your domain"
             putStrLn $ "and put it in /etc/letsencrypt/live/" ++ domain ++ "/fullchain.pem"
             putStrLn $ "my suggestion is running this command:"
             putStrLn $ "sudo letsencrypt certonly --webroot --webroot-path <YOUR_APPLICATION_DIRECTORY> -d " ++ domain 
 
-        putStrLn $ "for more information, see: https://certbot.eff.org/"
+        liftIO $ putStrLn $ "for more information, see: https://certbot.eff.org/"
+
       return ()
     where
-      restart = async $ do
+      restart = liftedAsync $ do
         result <- restartService "nginx"
         case result of
           Left err -> return ()
           Right _ ->
-            putStrLn $ "restarted " ++ show serverService
+            liftIO $ putStrLn $ "restarted " ++ show serverService
 
       createCert path cmd = do
         result <- executeRoot cmd ["certonly", "--webroot", "--webroot-path", wDirectory, "-d", domain, "--email", email, "--agree-tos", "-n"] "" False
         case result of
           Left _ -> if cmd == "letsencrypt" then createCert path "certbot" else return ()
           Right stdout -> do
-            putStrLn stdout
+            liftIO $ putStrLn stdout
 
             when (not ("error" `isInfixOf` stdout)) $ do
-              writeFile path (show params)
-              wait =<< restart
+              liftIO $ writeFile path (show params)
+              liftIO . wait =<< restart
+              return ()
 
       writeIncludeStatementIfMissing path target = do
         content <- readFile path

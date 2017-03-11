@@ -29,7 +29,7 @@ module System.Serverman ( run
 
   import Control.Monad.Free
 
-  run :: Action r -> IO r
+  run :: Action r -> App r
   run (Pure r) = return r
   run (Free (DetectOS next)) = getOS >>= run . next
   run (Free (Start os service next)) = startService os service >> run next
