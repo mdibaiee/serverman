@@ -21,8 +21,8 @@ module System.Serverman.Actions.Nginx (nginx) where
     do
       -- Turn SSL off at first, because we have not yet received a certificate
       let content = show (params { ssl = False, port = "80" })
-          mainConfig = configDirectory serverService </> "nginx.conf"
-          parent = configDirectory serverService </> "serverman-configs"
+          mainConfig = config serverService </> "nginx.conf"
+          parent = config serverService </> "serverman-configs"
           path = parent </> domain
           targetDir = wDirectory
 
@@ -33,7 +33,7 @@ module System.Serverman.Actions.Nginx (nginx) where
         writeIncludeStatementIfMissing mainConfig parent
 
         when ssl $ do
-          let sslPath = configDirectory serverService </> "ssl.conf"
+          let sslPath = config serverService </> "ssl.conf"
           writeFileIfMissing sslPath nginxSSL
           putStrLn $ "wrote ssl configuration to " ++ sslPath
 

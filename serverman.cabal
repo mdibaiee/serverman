@@ -20,20 +20,14 @@ library
                      , System.Serverman.Utils
                      , System.Serverman.Action
                      
-                     , System.Serverman.Actions.WebServer
-                     , System.Serverman.Actions.Nginx
-
-                     , System.Serverman.Actions.Database
-                     , System.Serverman.Actions.MySQL
-                     , System.Serverman.Actions.MongoDB
-
-                     , System.Serverman.Actions.FileSharing
-                     , System.Serverman.Actions.VsFTPd
-
                      , System.Serverman.Actions.Install
                      , System.Serverman.Actions.Env
-                     , System.Serverman.Actions.Start
+                     , System.Serverman.Actions.Manage
                      , System.Serverman.Actions.Remote
+                     , System.Serverman.Actions.Repository
+                     , System.Serverman.Actions.Call
+
+                     , System.Serverman.Types
                      , System.Serverman.Services
   build-depends:       base >= 4.7 && < 5
                      , free >= 4.12.4 && < 5
@@ -52,6 +46,10 @@ library
                      , Unixutils
                      , mtl
                      , monad-control
+                     , aeson
+                     , containers
+                     , hint
+                     , stack
   default-language:    Haskell2010
 
 executable serverman

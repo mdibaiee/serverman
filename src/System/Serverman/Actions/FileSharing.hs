@@ -17,7 +17,7 @@ module System.Serverman.Actions.FileSharing (FileSharingParams(..)) where
 
   instance Show FileSharingParams where
     show (FileSharingParams { fDirectory, fUser, fPass, fPort, fWritable, fAnonymous, fAnonymousWrite, fService })
-      | fService == VsFTPd = 
+      | name fService == "vsftpd" = 
           let boolToEnglish True  = "YES"
               boolToEnglish False = "NO"
           in 

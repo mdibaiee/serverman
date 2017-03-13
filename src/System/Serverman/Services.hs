@@ -1,28 +1,27 @@
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 module System.Serverman.Services ( Service(..)
-                                 , configDirectory) where
+                                 , Repository
+                                 , packageByOS
+                                 , info) where
+  import System.Serverman.Utils
+  import System.Serverman.Actions.Env
+  import System.Serverman.Types
 
-  data Service = NGINX
-               | MySQL
-               | MongoDB
-               | VsFTPd
-               | LetsEncrypt
-               | SSHFs
-                 deriving (Eq, Show)
+  import Data.Aeson
+  import Data.Maybe
+  import GHC.Generics
 
-  class Configurable a where
-    configDirectory :: a -> FilePath
+  packageByOS :: Service -> OS -> [String]
+  packageByOS (Service { packages }) os = fromMaybe (fromJust $ lookup Unknown packages) (lookup os packages)
 
-  instance Configurable Service where
-    configDirectory NGINX = "/etc/nginx/"
-    configDirectory MySQL = "/etc/mysql/"
-    configDirectory MongoDB = "/etc/mongodb"
-    configDirectory VsFTPd = "/etc/vsftpd.conf"
-
-  instance Read Service where
-    readsPrec _ service
-          | service == "nginx" = [(NGINX, [])]
-          | service == "mysql" = [(MySQL, [])]
-          | service == "mongodb" = [(MongoDB, [])]
-          | service == "vsftpd" = [(VsFTPd, [])]
-          | service == "letsencrypt" = [(LetsEncrypt, [])]
-          | service == "sshfs" = [(SSHFs, [])]
+  info :: Service -> String
+  info s@(Service { config, packages, service, version, dependencies }) = 
+    show s ++ (
+      indent $
+        keyvalue [ ("config", config)
+                 , ("pacakges", commas $ map (commas . snd) packages)
+                 , ("service", service)
+                 , ("dependencies", commas $ map name dependencies)] ": "
+    )

@@ -1,12 +1,12 @@
 module System.Serverman.Actions.Env (OS(..), getOS) where
   import System.Serverman.Utils
+  import System.Serverman.Types
+
   import System.Process
   import Data.List
   import System.IO.Error
   import Data.Either
   import Data.Char
-
-  data OS = Debian | Arch | Mac | Unknown deriving (Show, Eq)
   
   getOS = do
     arch_release <- execute "cat" ["/etc/os-release"] "" False

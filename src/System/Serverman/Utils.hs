@@ -6,9 +6,11 @@ module System.Serverman.Utils ( App (..)
                               , runApp
                               , keyvalue
                               , parseKeyValue
+                              , splitAtElem
                               , semicolon
                               , block
                               , indent
+                              , commas
                               , quote
                               , removeTrailingNewline
                               , execIfMissing
@@ -44,16 +46,7 @@ module System.Serverman.Utils ( App (..)
   import Control.Monad.Trans.Control
   import Data.Default.Class
 
-  import Debug.Trace
-
-  data AppState = AppState { remoteMode :: Maybe (Address, String) } deriving (Show)
-
-  instance Default AppState where
-    def = AppState { remoteMode = Nothing }
-  type App = StateT AppState IO
-
-  runApp :: App a -> IO (a, AppState)
-  runApp k = runStateT k def
+  import System.Serverman.Types
 
   keyvalue :: [(String, String)] -> String -> String
   keyvalue ((a, b):xs) delimit = a ++ delimit ++ b ++ "\n" ++ keyvalue xs delimit
@@ -67,15 +60,29 @@ module System.Serverman.Utils ( App (..)
             (key, value) = splitAt delimitIndex line
         in (key, tail value)
 
+  splitAtElem :: String -> Char -> [String]
+  splitAtElem "" _ = []
+  splitAtElem str char =
+    case charIndex of
+      Just index -> 
+        let (left, x:right) = splitAt index str
+        in left : splitAtElem right char
+      Nothing -> [str]
+    where
+      charIndex = char `elemIndex` str
+
   semicolon :: String -> String
   semicolon text = unlines $ map (++ ";") (lines text)
 
   block :: String -> String -> String
   block blockName content = blockName ++ " {\n" ++ indent content ++ "}"
 
+  commas :: [String] -> String
+  commas text = intercalate ", " text
+
   execIfMissing :: (Applicative f, Monad f, MonadIO f) => FilePath -> f () -> f ()
   execIfMissing path action = do
-    exists <- liftIO $ doesFileExist path
+    exists <- liftIO $ doesPathExist path
     
     when (not exists) action
 
@@ -147,30 +154,6 @@ module System.Serverman.Utils ( App (..)
       escape string = foldl' (\str char -> replace str char ('\\':char)) string specialCharacters
         where
           specialCharacters = ["$"]
-
-  type Host = String
-  type Port = String
-  type User = String
-  data Address = Address Host Port User 
-
-  instance Read Address where
-    readsPrec _ addr
-      | '@' `elem` addr =
-            let (user, rest) = (takeWhile (/= '@') addr, tail $ dropWhile (/= '@') addr)
-                (host, port) = readHostPort rest
-            in [(Address host port user, [])]
-      | otherwise = 
-            let (host, port) = readHostPort addr
-            in [(Address host port "", [])]
-
-      where
-        readHostPort str = (takeWhile (/= ':') str, tail $ dropWhile (/= ':') str)
-
-  instance Show Address where
-    show (Address host port user)
-      | (not . null) user = user ++ "@" ++ show (Address host port "")
-      | (not . null) port = show (Address host "" "") ++ ":" ++ port
-      | otherwise = host
 
   execRemote :: Address -> Maybe String -> Maybe String -> String -> String -> [String] -> String -> Maybe String -> Bool -> App (Either String String)
   execRemote addr@(Address host port user) maybeKey maybeUser password cmd args stdin cwd logErrors = do

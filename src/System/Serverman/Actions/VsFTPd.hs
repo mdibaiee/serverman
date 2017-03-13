@@ -21,7 +21,7 @@ module System.Serverman.Actions.VsFTPd (vsftpd) where
   vsftpd params@(FileSharingParams { fDirectory, fPort, fUser, fPass, fAnonymous, fAnonymousWrite, fWritable, fService, fRecreateUser }) =
     do
       let content = show params
-          original = configDirectory fService
+          original = config fService
           userList = takeDirectory original </> "vsftpd-serverman-user-list"
 
       when fRecreateUser $ executeRoot "userdel" [fUser] "" True >> return ()

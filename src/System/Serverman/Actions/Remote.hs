@@ -14,8 +14,6 @@ module System.Serverman.Actions.Remote ( runRemotely
   import Data.IORef
   import Control.Monad.State
 
-  import Debug.Trace
-
   runRemotely :: Address -> App r -> App ()
   runRemotely addr@(Address host port user) action = do
     let servermanAddr = Address host port "serverman"

@@ -2,20 +2,20 @@
 
 module System.Serverman.Action ( ActionF(..)
                                , Action
-                               , newServer
-                               , newDatabase
-                               , newFileSharing
+                               , call
+                               , fetchRepository
                                , start
+                               , stop
                                , install
                                , remote
                                , detectOS) where
 
-  import System.Serverman.Actions.WebServer
-  import System.Serverman.Actions.FileSharing
-  import System.Serverman.Actions.Database
   import System.Serverman.Actions.Env
+  import System.Serverman.Actions.Repository
   import System.Serverman.Actions.Remote
+
   import System.Serverman.Utils
+  import System.Serverman.Types
   import System.Serverman.Services
 
   import System.Directory
@@ -28,33 +28,27 @@ module System.Serverman.Action ( ActionF(..)
   import System.IO.Error
   import Data.Char
 
-  data ActionF x = NewWebServer ServerParams x
-                 | NewDatabase DatabaseParams x
-                 | NewFileSharing FileSharingParams x
+  data ActionF x = Call Service Params x
                  | DetectOS (OS -> x)
                  | Install Service OS x
                  | Remote [Address] (Action ()) x
+                 | FetchRepository x
                  | Start Service OS x
+                 | Stop Service OS x
 
   instance Functor ActionF where
-    fmap f (NewWebServer params x) = NewWebServer params (f x)
-    fmap f (NewDatabase params x) = NewDatabase params (f x)
-    fmap f (NewFileSharing params x) = NewFileSharing params (f x)
+    fmap f (Call service params x) = Call service params (f x)
     fmap f (Install service os x) = Install service os (f x)
     fmap f (Start service os x) = Start service os (f x)
+    fmap f (Stop service os x) = Stop service os (f x)
     fmap f (DetectOS x) = DetectOS (f . x)
     fmap f (Remote addr action x) = Remote addr action (f x)
+    fmap f (FetchRepository x) = FetchRepository (f x)
 
   type Action = Free ActionF
 
-  newServer :: ServerParams -> Action ()
-  newServer params = liftF $ NewWebServer params ()
-
-  newDatabase :: DatabaseParams -> Action ()
-  newDatabase params = liftF $ NewDatabase params ()
-
-  newFileSharing :: FileSharingParams -> Action ()
-  newFileSharing params = liftF $ NewFileSharing params ()
+  call :: Service -> Params -> Action ()
+  call service params = liftF $ Call service params ()
 
   install :: Service -> OS -> Action ()
   install service os = liftF $ Install service os ()
@@ -62,8 +56,14 @@ module System.Serverman.Action ( ActionF(..)
   start :: Service -> OS -> Action ()
   start service os = liftF $ Start service os ()
 
+  stop :: Service -> OS -> Action ()
+  stop service os = liftF $ Stop service os ()
+
   detectOS :: Action OS
   detectOS = liftF $ DetectOS id
 
   remote :: [Address] -> Action () -> Action ()
   remote addrs action = liftF $ Remote addrs action ()
+
+  fetchRepository :: Action ()
+  fetchRepository = liftF $ FetchRepository ()

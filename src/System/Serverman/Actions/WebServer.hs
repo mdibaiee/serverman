@@ -18,7 +18,7 @@ module System.Serverman.Actions.WebServer (ServerParams(..), ServerType(..)) whe
                                    } deriving (Eq)
   instance Show ServerParams where
     show (ServerParams { wDirectory, domain, port, forward, email, ssl, serverType, serverService }) 
-      | serverService == NGINX = 
+      | name serverService == "nginx" = 
           let redirect
                 | ssl = block "server" $
                               semicolon $
