@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
-module System.Serverman.Actions.Repository (fetchRepo) where
+module System.Serverman.Actions.Repository (fetchRepo, findService) where
   import System.Serverman.Utils
   import System.Directory
   import System.Serverman.Services
@@ -19,8 +19,14 @@ module System.Serverman.Actions.Repository (fetchRepo) where
   import Control.Monad.State
   import qualified Data.ByteString.Lazy.Char8 as BS
   import qualified Data.Text as T
+  import Data.List
 
   sourceURL = "https://github.com/mdibaiee/serverman"
+
+  findService :: String -> App (Maybe Service)
+  findService n = do
+    (AppState { repository }) <- get
+    return $ find (\a -> name a == n) repository
 
   fetchRepo :: App Repository
   fetchRepo = do
@@ -53,6 +59,7 @@ module System.Serverman.Actions.Repository (fetchRepo) where
         case repo of
           Just list -> do
             let r = rights list
+
             state <- get
             put $ state { repository = r }
             return $ rights list
@@ -70,17 +77,17 @@ module System.Serverman.Actions.Repository (fetchRepo) where
           flip parseEither obj $ \object -> do
             name <- object .: "name"
             version <- object .: "version"
-            config <- object .: "config"
             service <- object .: "service"
             category <- object .: "category"
             packages <- object .: "packages"
+            dependencies <- object .: "dependencies"
 
             pkglist :: [(OS, [String])] <- map (\(os, name) -> (read os, name)) <$> M.toList <$> parseJSON packages
 
             return Service { name = name
                            , version = version
-                           , config = config
                            , service = service
                            , category = category
                            , packages = pkglist
+                           , dependencies = dependencies
                            }

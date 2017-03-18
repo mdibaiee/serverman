@@ -17,11 +17,10 @@ module System.Serverman.Services ( Service(..)
   packageByOS (Service { packages }) os = fromMaybe (fromJust $ lookup Unknown packages) (lookup os packages)
 
   info :: Service -> String
-  info s@(Service { config, packages, service, version, dependencies }) = 
+  info s@(Service { packages, service, version, dependencies }) = 
     show s ++ (
       indent $
-        keyvalue [ ("config", config)
-                 , ("pacakges", commas $ map (commas . snd) packages)
+        keyvalue [ ("pacakges", commas $ map (commas . snd) packages)
                  , ("service", service)
-                 , ("dependencies", commas $ map name dependencies)] ": "
+                 , ("dependencies", commas dependencies)] ": "
     )

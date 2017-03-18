@@ -7,6 +7,7 @@ module System.Serverman.Actions.Env (OS(..), getOS) where
   import System.IO.Error
   import Data.Either
   import Data.Char
+  import Control.Monad.State
   
   getOS = do
     arch_release <- execute "cat" ["/etc/os-release"] "" False
@@ -20,4 +21,7 @@ module System.Serverman.Actions.Env (OS(..), getOS) where
             | "Mac" `isInfixOf` release = Mac
             | otherwise = Unknown
 
-    return distro
+    state <- get
+    put $ state { os = distro }
+
+    return ()

@@ -57,11 +57,10 @@ module System.Serverman.Types ( Service (..)
       | os == Unknown = "_"
 
   data Service = Service { name         :: String
-                         , config       :: String
                          , packages     :: [(OS, [String])]
                          , service      :: String
                          , version      :: String
-                         , dependencies :: [Service]
+                         , dependencies :: [String]
                          , category     :: String
                          } deriving (Eq, Generic)
 
@@ -74,15 +73,19 @@ module System.Serverman.Types ( Service (..)
 
   type Repository = [Service]
 
-  data AppState = AppState { remoteMode :: Maybe (Address, String)
-                           , repository :: Repository
+  data AppState = AppState { remoteMode    :: Maybe (Address, String)
+                           , repository    :: Repository
                            , repositoryURL :: String
+                           , os            :: OS
+                           , arguments     :: [(String, Maybe String)]
                            } deriving (Show)
 
   instance Default AppState where
-    def = AppState { remoteMode = Nothing
-                   , repository = def
+    def = AppState { remoteMode    = Nothing
+                   , repository    = def
                    , repositoryURL = "https://github.com/mdibaiee/serverman-repository"
+                   , os            = Unknown
+                   , arguments     = []
                    }
   type App = StateT AppState IO
 

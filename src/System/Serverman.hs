@@ -21,12 +21,12 @@ module System.Serverman ( run
 
   run :: Action r -> App r
   run (Pure r) = return r
-  run (Free (DetectOS next)) = getOS >>= run . next
-  run (Free (Start os service next)) = startService os service >> run next
-  run (Free (Stop os service next)) = stopService os service >> run next
-  run (Free (Install os service next)) = installService os service >> run next
+  run (Free (DetectOS next)) = getOS >> run next
+  run (Free (Start service next)) = startService service >> run next
+  run (Free (Stop service next)) = stopService service >> run next
+  run (Free (Install service next)) = installService service >> run next
 
-  run (Free (Call service params next)) = callService service params >> run next
+  run (Free (Call service next)) = callService service >> run next
 
   run (Free (Remote addrs action next)) = mapM_ (\addr -> runRemotely addr (run action)) addrs >> run next
 

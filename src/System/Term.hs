@@ -17,6 +17,7 @@ module System.Term ( initialize ) where
   import Data.List
 
   import System.Serverman.Utils
+  import System.Serverman.Actions.Repository
 
   initialize = do
     args <- getArgs
@@ -24,29 +25,39 @@ module System.Term ( initialize ) where
     dir <- liftIO $ getAppUserDataDirectory "serverman"
     let path = dir </> "repository"
 
-    liftIO $ print args
     let params = parseParams args
     liftIO $ print params
 
     -- Fetch repository first
     S.runApp $ do
       S.run (S.fetchRepository)
+      S.run (S.detectOS)
 
       state@(S.AppState { S.repository }) <- get
+      put $ state { arguments = rest params }
 
       case params of
         (Params { listServices = True }) -> liftIO $ do
           mapM_ print repository
         (Params { install = Just service }) -> do
-          os <- S.run S.detectOS
-          S.run (S.install (findService repository service) os)
+          ms <- findService service
+          case ms of
+            Just s -> S.run (S.install s)
+            Nothing -> liftIO $ putStrLn $ "service not found: " ++ service
+        (Params { rest = (x:xs) }) -> do
+          case x of
+            (service, Nothing) -> do
+              ms <- findService service
+              case ms of
+                Just s -> S.run (S.call s)
+                Nothing -> liftIO $ putStrLn $ "could not find any service matching " ++ service
+            _ -> liftIO $ putStrLn $ "could not understand your input"
 
       {-S.run (S.call (head repository) [])-}
 
     return ()
 
     where
-      findService repository n = fromJust $ find (\a -> S.name a == n) repository
 
 
   data Manage = Start | Stop deriving (Eq, Show)
@@ -56,6 +67,7 @@ module System.Term ( initialize ) where
                        , update       :: Bool
                        , remote       :: Maybe FilePath
                        , help         :: Bool
+                       , rest         :: [(String, Maybe String)]
                        } deriving (Show)
 
   instance Default Params where
@@ -65,6 +77,7 @@ module System.Term ( initialize ) where
                   , remote       = Nothing
                   , update       = False
                   , help         = False
+                  , rest         = []
                   }
 
   parseParams :: [String] -> Params
@@ -76,8 +89,20 @@ module System.Term ( initialize ) where
   parseParams ("--remote":s:xs) = (parseParams xs) { remote = Just s }
   parseParams ("--help":xs) = (parseParams xs) { help = True }
   parseParams ("-h":xs) = (parseParams xs) { help = True }
-  parseParams [] = def
-  parseParams _ = Params { help = True }
+  parseParams [] = def { help = True }
+  parseParams x = def { rest = toPairs x }
+    where
+      toPairs [] = []
+      toPairs [x] = [(getWord x, Nothing)]
+      toPairs (x:y:xs)
+        | flagName x && value y = [(getWord x, Just y)] ++ toPairs xs
+        | flagName y && value x = [(getWord x, Nothing)] ++ toPairs (y:xs)
+        | flagName x && flagName y = [(getWord x, Nothing)] ++ toPairs (y:xs)
+        | otherwise = toPairs xs
+
+      flagName = isPrefixOf "-"
+      value = not . flagName
+      getWord = dropWhile (== '-')
 
    {-WEB SERVER -}
   {-data Params = WebServerParams { directory :: String-}

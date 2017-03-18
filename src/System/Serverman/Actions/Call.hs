@@ -14,51 +14,44 @@ module System.Serverman.Actions.Call (callService) where
   import Data.List
   import Stack.Package
 
-  callService :: Service -> Params -> App ()
-  callService s@(Service { name, version }) params = do
+  callService :: Service -> App ()
+  callService s@(Service { name, version }) = do
     state@(AppState { repositoryURL }) <- get
 
     dir <- liftIO $ getAppUserDataDirectory "serverman"
     let path = dir </> "repository" </> "services" </> name
         source = dir </> "source" </> "src"
-        entry = path </> "src" </> "Main.hs"
-        object = path </> "Main.o"
+        src = path </> "src"
+        entry = src </> "Main.hs"
 
-    packages <- liftIO $ readFile $ path </> "packages"
-
-    {-result <- exec "stack" (["ghc", entry, "--package", intercalate "," . lines $ packages, "--"] ++ includeArgs) "" (Just source) True-}
-    {-let packagePaths = splitAtElem packagePath ':'-}
-    let include = [source, path]
+    let include = [source, src]
         includeArgs = map ("-i"++) include
 
+    (Right stackEnv) <- exec "stack" ["install", "--dependencies-only"] "" (Just path) True
     (Right stackEnv) <- exec "stack" ["exec", "env"] "" (Just path) True
 
     backupEnv <- liftIO $ getEnvironment
     liftIO $ setEnvironment $ parseKeyValue stackEnv '='
 
-    liftIO $ print include
-
     func <- liftIO $ runInterpreter (interpreter include entry)
 
     case func of
-      Right fn -> fn
+      Right fn -> fn s
       Left err -> liftIO $ do
         putStrLn $ "error reading `call` from module " ++ entry
-        print err
+        case err of
+          WontCompile errs -> mapM_ (putStrLn . errMsg) errs
+
+          x -> print x
 
     liftIO $ setEnvironment backupEnv
 
     return ()
-      {-result <- build entry object ["-i" ++ source]-}
-      {-print result-}
 
-      {-result :: (Maybe ) <- liftIO $ eval content ["System.Serverman.Types", "System.Serverman.Utils", "Control.Monad.State"]-}
-      {-liftIO $ print result-}
-
-  interpreter :: [FilePath] -> FilePath -> Interpreter (App ())
+  interpreter :: [FilePath] -> FilePath -> Interpreter (Service -> App ())
   interpreter path entry = do
     set [searchPath := path]
     loadModules [entry]
     setTopLevelModules ["Main"]
-    interpret "call" (as :: App ())
+    interpret "call" (as :: Service -> App ())
 

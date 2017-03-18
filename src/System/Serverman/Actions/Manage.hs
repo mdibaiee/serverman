@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 module System.Serverman.Actions.Manage (startService, stopService) where
+  import System.Serverman.Types
   import System.Serverman.Utils
   import System.Serverman.Actions.Env
   import System.Serverman.Actions.Install
@@ -8,15 +9,25 @@ module System.Serverman.Actions.Manage (startService, stopService) where
 
   import Control.Monad.State
 
-  startService :: Service -> OS -> App ()
-  startService (Service { service }) os
-    | os == Mac = liftIO $ putStrLn $ "Couldn't start " ++ service ++ " automatically. If you encounter any problems, make sure it is running."
-    | otherwise = executeRoot "systemctl" ["start", service] "" True
-                >> execute "sleep" ["5s"] "" True
-                >> return ()
+  startService :: Service -> App ()
+  startService (Service { service }) = do
+    (AppState { os }) <- get
+    case os of 
+      Mac -> do
+        liftIO $ putStrLn $ "Couldn't start " ++ service ++ " automatically. If you encounter any problems, make sure it is running."
 
-  stopService :: Service -> OS -> App ()
-  stopService (Service { service }) os
-    | os == Mac = liftIO $ putStrLn $ "Couldn't stop " ++ service ++ " automatically."
-    | otherwise = executeRoot "systemctl" ["stop", service] "" True
-                >> return ()
+      _   -> do
+        executeRoot "systemctl" ["start", service] "" True
+        execute "sleep" ["5s"] "" True
+        return ()
+
+  stopService :: Service -> App ()
+  stopService (Service { service }) = do
+    (AppState { os }) <- get
+    case os of 
+      Mac -> do
+        liftIO $ putStrLn $ "Couldn't stop " ++ service ++ " automatically."
+
+      _   -> do
+        executeRoot "systemctl" ["stop", service] "" True
+        return ()

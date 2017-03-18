@@ -14,8 +14,8 @@ module System.Serverman.Action ( ActionF(..)
   import System.Serverman.Actions.Repository
   import System.Serverman.Actions.Remote
 
-  import System.Serverman.Utils
   import System.Serverman.Types
+  import System.Serverman.Utils
   import System.Serverman.Services
 
   import System.Directory
@@ -28,39 +28,39 @@ module System.Serverman.Action ( ActionF(..)
   import System.IO.Error
   import Data.Char
 
-  data ActionF x = Call Service Params x
-                 | DetectOS (OS -> x)
-                 | Install Service OS x
+  data ActionF x = Call Service x
+                 | DetectOS x
+                 | Install Service x
                  | Remote [Address] (Action ()) x
                  | FetchRepository x
-                 | Start Service OS x
-                 | Stop Service OS x
+                 | Start Service x
+                 | Stop Service x
 
   instance Functor ActionF where
-    fmap f (Call service params x) = Call service params (f x)
-    fmap f (Install service os x) = Install service os (f x)
-    fmap f (Start service os x) = Start service os (f x)
-    fmap f (Stop service os x) = Stop service os (f x)
-    fmap f (DetectOS x) = DetectOS (f . x)
+    fmap f (Call service x) = Call service (f x)
+    fmap f (Install service x) = Install service (f x)
+    fmap f (Start service x) = Start service (f x)
+    fmap f (Stop service x) = Stop service (f x)
+    fmap f (DetectOS x) = DetectOS (f x)
     fmap f (Remote addr action x) = Remote addr action (f x)
     fmap f (FetchRepository x) = FetchRepository (f x)
 
   type Action = Free ActionF
 
-  call :: Service -> Params -> Action ()
-  call service params = liftF $ Call service params ()
+  call :: Service -> Action ()
+  call service = liftF $ Call service ()
 
-  install :: Service -> OS -> Action ()
-  install service os = liftF $ Install service os ()
+  install :: Service -> Action ()
+  install service = liftF $ Install service ()
 
-  start :: Service -> OS -> Action ()
-  start service os = liftF $ Start service os ()
+  start :: Service -> Action ()
+  start service = liftF $ Start service ()
 
-  stop :: Service -> OS -> Action ()
-  stop service os = liftF $ Stop service os ()
+  stop :: Service -> Action ()
+  stop service = liftF $ Stop service ()
 
-  detectOS :: Action OS
-  detectOS = liftF $ DetectOS id
+  detectOS :: Action ()
+  detectOS = liftF $ DetectOS ()
 
   remote :: [Address] -> Action () -> Action ()
   remote addrs action = liftF $ Remote addrs action ()
