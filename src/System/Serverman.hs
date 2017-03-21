@@ -26,7 +26,7 @@ module System.Serverman ( run
   run (Free (Stop service next)) = stopService service >> run next
   run (Free (Install service next)) = installService service >> run next
 
-  run (Free (Call service next)) = callService service >> run next
+  run (Free (Call service remote next)) = callService service remote >> run next
 
   run (Free (Remote addrs action next)) = mapM_ (\addr -> runRemotely addr (run action)) addrs >> run next
 

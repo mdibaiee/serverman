@@ -40,20 +40,18 @@ module System.Serverman.Types ( Service (..)
       | otherwise = host
 
 
-  data OS = Debian | Arch | Mac | Unknown deriving (Eq)
+  data OS = Debian | Arch | Unknown deriving (Eq)
 
   instance Read OS where
     readsPrec _ os
       | os == "debian" = [(Debian, [])]
       | os == "arch" = [(Arch, [])]
-      | os == "mac" = [(Mac, [])]
       | os == "_" = [(Unknown, [])]
 
   instance Show OS where
     show os
       | os == Debian = "debian"
       | os == Arch = "arch"
-      | os == Mac = "mac"
       | os == Unknown = "_"
 
   data Service = Service { name         :: String

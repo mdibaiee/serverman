@@ -13,7 +13,7 @@ module System.Serverman.Actions.Install (installService) where
   import System.Process
   import Control.Concurrent.Async
   import Control.Monad
-  import Control.Monad.State
+  import Control.Monad.State hiding (liftIO)
   import Control.Monad.Trans.Control
   import Data.List
   import Data.Maybe
@@ -28,7 +28,6 @@ module System.Serverman.Actions.Install (installService) where
     let base = case os of
           Arch -> ("pacman", ["-S", "--noconfirm", "--quiet"])
           Debian -> ("apt-get", ["install", "-y"])
-          Mac -> ("brew", ["install", "-y"])
           _ -> ("echo", ["Unknown operating system"])
         pkg = packageByOS s os
 

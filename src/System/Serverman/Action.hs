@@ -28,7 +28,7 @@ module System.Serverman.Action ( ActionF(..)
   import System.IO.Error
   import Data.Char
 
-  data ActionF x = Call Service x
+  data ActionF x = Call Service (Maybe FilePath) x
                  | DetectOS x
                  | Install Service x
                  | Remote [Address] (Action ()) x
@@ -37,7 +37,7 @@ module System.Serverman.Action ( ActionF(..)
                  | Stop Service x
 
   instance Functor ActionF where
-    fmap f (Call service x) = Call service (f x)
+    fmap f (Call service remote x) = Call service remote (f x)
     fmap f (Install service x) = Install service (f x)
     fmap f (Start service x) = Start service (f x)
     fmap f (Stop service x) = Stop service (f x)
@@ -47,8 +47,8 @@ module System.Serverman.Action ( ActionF(..)
 
   type Action = Free ActionF
 
-  call :: Service -> Action ()
-  call service = liftF $ Call service ()
+  call :: Service -> Maybe FilePath -> Action ()
+  call service remote = liftF $ Call service remote ()
 
   install :: Service -> Action ()
   install service = liftF $ Install service ()

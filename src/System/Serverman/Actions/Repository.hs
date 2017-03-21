@@ -16,7 +16,7 @@ module System.Serverman.Actions.Repository (fetchRepo, findService) where
   import Data.Aeson.Types
   import GHC.Generics
   import qualified Data.Map as M
-  import Control.Monad.State
+  import Control.Monad.State hiding (liftIO)
   import qualified Data.ByteString.Lazy.Char8 as BS
   import qualified Data.Text as T
   import Data.List

@@ -1,8 +1,8 @@
 module System.Serverman.Actions.Remote ( runRemotely
                                        , Address) where
   import System.Serverman.Utils
+  import System.Serverman.Actions.Env
 
-  import System.Unix.Chroot
   import Data.List
   import System.Directory
   import System.IO
@@ -11,16 +11,27 @@ module System.Serverman.Actions.Remote ( runRemotely
   import System.Posix.Files
   import Control.Monad
   import Data.Maybe
+  import Control.Monad.State hiding (liftIO)
   import Data.IORef
-  import Control.Monad.State
+  import Data.Either
+  import Control.Concurrent
 
   runRemotely :: Address -> App r -> App ()
   runRemotely addr@(Address host port user) action = do
+    tmp <- liftIO getTemporaryDirectory
+    (Right userID) <- execute "id" ["-u"] "" True
+
     let servermanAddr = Address host port "serverman"
         p = if null port then [] else ["-p", port]
         connection = takeWhile (/= ':') (show addr)
         smConnection = "serverman@" ++ host
-        path = "/tmp/serverman/" </> connection
+        path = tmp </> smConnection
+        uid = ["-o", "uid=" ++ userID, "-o", "gid=" ++ userID]
+
+        serverPaths = ["/usr/lib/openssh/sftp-server", "/usr/lib/ssh/sftp-server"]
+
+        options = ["-o", "nonempty",
+                   "-o", "sftp_server=sudo " ++ head serverPaths]
 
     home <- liftIO getHomeDirectory
 
@@ -29,21 +40,24 @@ module System.Serverman.Actions.Remote ( runRemotely
 
     liftIO $ createDirectoryIfMissing True path
 
+    -- check if a connection to SSH server using public key is possible
+    -- result <- execRemote servermanAddr (Just keyPath) Nothing "" "echo" [] "" Nothing False
     execute "fusermount" ["-u", path] "" False
+    result <- execute "sshfs" (p ++ noPassword ++ uid ++ options ++ ["-o", "IdentityFile=" ++ keyPath, smConnection ++ ":/", path]) "" True
 
-    let sftpOptions = ["-o", "sftp_server=sudo -u serverman /usr/lib/openssh/sftp-server"]
-
-    result <- execute "sshfs" (p ++ noPassword ++ sftpOptions ++ ["-o", "nonempty", "-o", "IdentityFile=" ++ keyPath, smConnection ++ ":/", path]) "" True
+    liftIO $ threadDelay 500
 
     case result of
       Right _ -> do
         state <- get
         put $ state { remoteMode = Just (servermanAddr, keyPath) }
+        getOS
         action
 
         return ()
 
-      Left _ -> do
+      Left err -> do
+        liftIO $ print err
         liftIO $ do
           putStrLn $ "it seems to be the first time you are using serverman for configuring " ++ show addr
           putStrLn $ "remotely. serverman will create a user, and add it to sudoers file. an ssh key will be created"
@@ -66,9 +80,12 @@ module System.Serverman.Actions.Remote ( runRemotely
         runCommand "useradd" ["-m", "-p", (quote . removeTrailingNewline) encryptedPassword, "serverman"]
         runCommand "echo" ["'serverman ALL=(ALL) NOPASSWD: ALL'", ">>", "/etc/sudoers"]
 
-        runServerman "mkdir" ["/home/serverman/.ssh", "-p"]
-        runServerman "touch" ["/home/serverman/.ssh/authorized_keys"]
-        runServerman "echo" [quote publicKey, ">>", "/home/serverman/.ssh/authorized_keys"]
+        runCommand "mkdir" ["/home/serverman/.ssh", "-p"]
+        runCommand "touch" ["/home/serverman/.ssh/authorized_keys"]
+        runCommand "echo" [quote publicKey, ">>", "/home/serverman/.ssh/authorized_keys"]
+        runCommand "chown" ["-R", "serverman", "/home/serverman"]
+
+        runRemotely addr action
 
         return ()
 
@@ -76,10 +93,6 @@ module System.Serverman.Actions.Remote ( runRemotely
 
     where
       noPassword = ["-o", "PasswordAuthentication=no", "-o", "PubkeyAuthentication=yes"]
-
-      chroot path (key, value)
-        | key == "PATH" = (key, path ++ concatMap (modPath path) value)
-        | otherwise = (key, value)
 
       modPath path c
         | c == ':' = ":" ++ path

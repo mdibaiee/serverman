@@ -14,6 +14,7 @@ module System.Serverman.Utils ( App (..)
                               , quote
                               , removeTrailingNewline
                               , execIfMissing
+                              , execIfExists
                               , writeFileIfMissing
                               , renameFileIfMissing
                               , commandError
@@ -23,6 +24,7 @@ module System.Serverman.Utils ( App (..)
                               , execRemote
                               , Address (..)
                               , liftedAsync
+                              , liftIO
                               , restartService
                               , getPassword
                               , executeRoot) where
@@ -30,6 +32,7 @@ module System.Serverman.Utils ( App (..)
   import System.IO
   import Control.Monad
   import System.Directory
+  import System.FilePath
   import System.Process
   import System.IO.Error
   import Control.Concurrent.Async
@@ -42,11 +45,28 @@ module System.Serverman.Utils ( App (..)
   import Data.Maybe
   import System.Posix.Files
   import System.Posix.Env
-  import Control.Monad.State
+  import qualified Control.Monad.State as ST
+  import Control.Monad.State hiding (liftIO)
   import Control.Monad.Trans.Control
   import Data.Default.Class
+  import System.Unix.Chroot
+  import Control.Monad.Catch
 
   import System.Serverman.Types
+
+  liftIO :: (MonadIO m, MonadState AppState m, MonadMask m) => IO a -> m a
+  {-liftIO :: IO a -> App a-}
+  liftIO action = do
+    state@(AppState { remoteMode }) <- get
+
+    case remoteMode of
+      Nothing -> ST.liftIO action
+
+      Just (Address host port user, _) -> do
+        tmp <- ST.liftIO getTemporaryDirectory
+        let path = tmp </> (user ++ "@" ++ host)
+        
+        fchroot path $ ST.liftIO action
 
   keyvalue :: [(String, String)] -> String -> String
   keyvalue ((a, b):xs) delimit = a ++ delimit ++ b ++ "\n" ++ keyvalue xs delimit
@@ -82,15 +102,21 @@ module System.Serverman.Utils ( App (..)
 
   execIfMissing :: (Applicative f, Monad f, MonadIO f) => FilePath -> f () -> f ()
   execIfMissing path action = do
-    exists <- liftIO $ doesPathExist path
+    exists <- ST.liftIO $ doesPathExist path
     
     when (not exists) action
+
+  execIfExists :: (Applicative f, Monad f, MonadIO f) => FilePath -> f () -> f ()
+  execIfExists path action = do
+    exists <- ST.liftIO $ doesPathExist path
+    
+    when exists action
 
   writeFileIfMissing :: FilePath -> String -> IO ()
   writeFileIfMissing path content = execIfMissing path (writeFile path content)
 
   renameFileIfMissing :: FilePath -> String -> IO ()
-  renameFileIfMissing path content = execIfMissing path (renameFile path content)
+  renameFileIfMissing path content = execIfMissing content (renameFile path content)
 
   appendAfter :: String -> String -> String -> String
   appendAfter content after line =
@@ -157,6 +183,9 @@ module System.Serverman.Utils ( App (..)
 
   execRemote :: Address -> Maybe String -> Maybe String -> String -> String -> [String] -> String -> Maybe String -> Bool -> App (Either String String)
   execRemote addr@(Address host port user) maybeKey maybeUser password cmd args stdin cwd logErrors = do
+    tmp <- liftIO getTemporaryDirectory
+    let passwordFile = tmp </> "pw"
+
     let userArgument = if isJust maybeUser then ["echo", password, "|", "sudo -S", "-u", fromJust maybeUser] else []
         keyArgument = if isJust maybeKey then ["-o", "IdentityFile=" ++ fromJust maybeKey] ++ noPassword else noKey
         p = if null port then [] else ["-p", port]
@@ -169,7 +198,7 @@ module System.Serverman.Utils ( App (..)
       backupEnv <- getEnvironment 
 
       writeFile passwordFile $ "echo " ++ password
-      setFileMode passwordFile ownerExecuteMode
+      setFileMode passwordFile accessModes
       setEnv "SSH_ASKPASS" passwordFile True
 
       return (backupEnv, passwordFile)
@@ -186,7 +215,6 @@ module System.Serverman.Utils ( App (..)
 
     return result
     where
-      passwordFile = "/tmp/serverman/pw"
       noPassword = ["-o", "PasswordAuthentication=no", "-o", "PubkeyAuthentication=yes"]
       noKey = ["-o", "PubkeyAuthentication=no", "-o", "PasswordAuthentication=yes"]
       options = ["-o", "StrictHostKeyChecking=no"]
