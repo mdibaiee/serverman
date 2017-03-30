@@ -5,8 +5,9 @@
 module System.Serverman.Actions.Repository (fetchRepo, findService) where
   import System.Serverman.Utils
   import System.Directory
-  import System.Serverman.Services
+  import System.Serverman.Services hiding (info)
   import System.Serverman.Actions.Env
+  import System.Serverman.Log
   import System.Serverman.Types
 
   import System.FilePath
@@ -26,27 +27,37 @@ module System.Serverman.Actions.Repository (fetchRepo, findService) where
   findService :: String -> App (Maybe Service)
   findService n = do
     (AppState { repository }) <- get
+    verbose $ "searching for service " ++ n
     return $ find (\a -> name a == n) repository
 
-  fetchRepo :: App Repository
-  fetchRepo = do
+  fetchRepo :: Bool -> App Repository
+  fetchRepo update = do
+    verbose "fetching repository"
+
     state@(AppState { repositoryURL }) <- get
     dir <- liftIO $ getAppUserDataDirectory "serverman"
     let path = dir </> "repository"
     let source = dir </> "source"
 
     execIfMissing path $ do
-      liftIO $ putStrLn $ "cloning " ++ repositoryURL ++ " in " ++ path
+      verbose "repository missing... cloning repository"
+      info $ "cloning " ++ repositoryURL ++ " in " ++ path
       execute "git" ["clone", repositoryURL, path] "" True
       return ()
 
     execIfMissing source $ do
-      liftIO $ putStrLn $ "cloning " ++ sourceURL ++ " in " ++ source
+      verbose "serverman source missing... cloning repository"
+
+      info $ "cloning " ++ sourceURL ++ " in " ++ source
       execute "git" ["clone", sourceURL, source] "" True
       return ()
 
-    {-exec "git" ["pull", "origin", "master"] "" (Just path) True-}
-    {-exec "git" ["pull", "origin", "master"] "" (Just source) True-}
+    when update $ do
+      verbose "updating repository"
+
+      exec "git" ["pull", "origin", "master"] "" (Just path) True
+      exec "git" ["pull", "origin", "master"] "" (Just source) True
+      return ()
 
     content <- liftIO $ readFile (path </> "repository.json")
 
@@ -65,10 +76,10 @@ module System.Serverman.Actions.Repository (fetchRepo, findService) where
             return $ rights list
 
           Nothing -> do
-            liftIO $ putStrLn $ "error parsing repository data, please try re-fetching the repository."
+            err $ "parsing repository data failed, please try re-fetching the repository."
             return []
       Nothing -> do
-        liftIO $ putStrLn $ "error parsing repository data, please try re-fetching the repository."
+        err $ "parsing repository data failed, please try re-fetching the repository."
         return []
 
     where

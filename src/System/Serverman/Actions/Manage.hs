@@ -6,11 +6,14 @@ module System.Serverman.Actions.Manage (startService, stopService) where
   import System.Serverman.Actions.Env
   import System.Serverman.Actions.Install
   import System.Serverman.Services
+  import System.Serverman.Log
 
   import Control.Monad.State hiding (liftIO)
 
   startService :: Service -> App ()
   startService (Service { service }) = do
+    verbose $ "starting service " ++ service
+
     (AppState { os }) <- get
     case os of 
       _   -> do
@@ -20,6 +23,8 @@ module System.Serverman.Actions.Manage (startService, stopService) where
 
   stopService :: Service -> App ()
   stopService (Service { service }) = do
+    verbose $ "stopping service " ++ service
+
     (AppState { os }) <- get
     case os of 
       _   -> do

@@ -4,10 +4,10 @@
 
 module System.Term ( initialize ) where
   import qualified System.Serverman as S
+  import System.Serverman.Log
 
   import System.Environment
   import System.Directory
-  import System.Exit
   import Data.Monoid
   import Data.Maybe
   import Control.Monad
@@ -15,56 +15,115 @@ module System.Term ( initialize ) where
   import Data.Default.Class
   import System.FilePath
   import Data.List
+  import System.Process
 
   import System.Serverman.Utils hiding (liftIO)
   import System.Serverman.Actions.Repository
 
   initialize = do
+    -- read arguments
     args <- getArgs
 
-    dir <- liftIO $ getAppUserDataDirectory "serverman"
-    let path = dir </> "repository"
+    dir <- getAppUserDataDirectory "serverman"
 
+    -- parse parameters
     let params = parseParams args
-    liftIO $ print params
+        isHelp = or $ map (`elem` args) ["help", "--help", "-h", "-?"]
 
     -- Fetch repository first
     S.runApp $ do
+      when (verboseM params) $ do
+        state <- get
+        put $ state { verboseMode = True }
+        verbose "verbose mode on"
+
+      verbose $ show params
+
+      -- fetch repository if running for the first time, set state
       S.run (S.fetchRepository)
+
+      -- detect local operating system
       S.run (S.detectOS)
 
       state@(S.AppState { S.repository }) <- get
-      put $ state { arguments = rest params }
+      put $ state { arguments = rest params, helpArg = isHelp }
 
       case params of
-        (Params { listServices = True }) -> liftIO $ do
-          mapM_ print repository
+        -- list services in repository
+        (Params { listServices = True }) -> do
+          mapM_ (write . show) repository
+
+        -- install a service
         p@(Params { install = Just service }) -> do
+          verbose $ "preparing to install " ++ service
           ms <- findService service
           case ms of
             Just s -> handleRemote p $ S.install s
-            Nothing -> liftIO $ putStrLn $ "service not found: " ++ service
+            Nothing -> die $ "service not found: " ++ service
+
+        p@(Params { update = True }) -> S.run (S.updateRepository)
+
+        p@(Params { manage = Just (act, service) }) -> do
+          verbose $ "preparing to " ++ show act ++ " " ++ service
+          ms <- findService service
+          case ms of
+            Just s -> do
+              case act of
+                Start -> 
+                  handleRemote p $ S.start s
+                Stop ->
+                  handleRemote p $ S.stop s
+
+            Nothing -> 
+              die $ "could not find any service matching " ++ service
+
+        -- install and call a service
         p@(Params { rest = (x:xs), remote }) -> do
           case x of
             (service, Nothing) -> do
+              verbose $ "preparing to call " ++ service
+
               ms <- findService service
               case ms of
                 Just s -> do
-                  handleRemote p $ S.install s
+                  when (not isHelp) $ do
+                    handleRemote p $ S.install s
+
                   S.run $ S.call s remote
 
-                Nothing -> liftIO $ putStrLn $ "could not find any service matching " ++ service
-            _ -> liftIO $ putStrLn $ "could not understand your input"
+                Nothing -> do
+                  if isHelp then
+                    servermanHelp
+                  else
+                    die $ "could not find any service matching " ++ service
+        _ -> servermanHelp
 
-      {-S.run (S.call (head repository) [])-}
+      -- after the program is done, terminate remaining processes
+      (S.AppState { S.processes }) <- get
+      mapM_ (liftIO . terminateProcess) processes
 
     return ()
 
     where
+      -- if remote mode is set, read the file and run the action
+      -- on servers, otherwise run action locally
       handleRemote (Params { remote = Just file }) action = do
         list <- liftIO $ map read . lines <$> readFile file
         S.run (S.remote list action)
       handleRemote (Params { remote = Nothing }) action = S.run action
+
+      servermanHelp = do
+        write "serverman [--options] [command/service] [--service-options]"
+
+        write $ mkHelp "commands"
+                          [ ("install <service>", "install a service")
+                          , ("repository list", "list services")
+                          , ("repository update", "update repository")
+                          , ("service start <service>", "start the service")
+                          , ("service stop <service>", "stop the service")
+                          , ("--remote <file>", "run in remote mode: takes a path to a file containing username@ip:port lines")]
+
+        write "to learn about a service's options, run |serverman <service> --help|"
 
 
   data Manage = Start | Stop deriving (Eq, Show)
@@ -73,9 +132,19 @@ module System.Term ( initialize ) where
                        , manage       :: Maybe (Manage, String)
                        , update       :: Bool
                        , remote       :: Maybe FilePath
-                       , help         :: Bool
                        , rest         :: [(String, Maybe String)]
-                       } deriving (Show)
+                       , verboseM     :: Bool
+                       }
+  
+  instance Show Params where
+    show (Params { listServices, install, manage, update, remote, rest, verboseM }) =
+      keyvalue [ ("list-services", show listServices)
+               , ("install", show install)
+               , ("manage", show manage)
+               , ("update", show update)
+               , ("remote", show remote)
+               , ("rest", show rest)
+               , ("verbose", show verboseM)] ": "
 
   instance Default Params where
     def = Params { listServices = False
@@ -83,8 +152,8 @@ module System.Term ( initialize ) where
                  , manage       = Nothing
                  , remote       = Nothing
                  , update       = False
-                 , help         = False
                  , rest         = []
+                 , verboseM     = False
                  }
 
   parseParams :: [String] -> Params
@@ -94,9 +163,7 @@ module System.Term ( initialize ) where
   parseParams ("service":"stop":s:xs) = (parseParams xs) { manage = Just (Stop, s) }
   parseParams ("install":s:xs) = (parseParams xs) { install = Just s }
   parseParams ("--remote":s:xs) = (parseParams xs) { remote = Just s }
-  parseParams ("--help":xs) = (parseParams xs) { help = True }
-  parseParams ("-h":xs) = (parseParams xs) { help = True }
-  parseParams [] = def { help = True }
+  parseParams ("--verbose":xs) = (parseParams xs) { verboseM = True }
   parseParams x = def { rest = toPairs x }
     where
       toPairs [] = []

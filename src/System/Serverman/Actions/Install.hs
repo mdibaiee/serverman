@@ -4,10 +4,11 @@
 module System.Serverman.Actions.Install (installService) where
   import System.Serverman.Action
   import System.Serverman.Utils
-  import System.Serverman.Services
+  import System.Serverman.Services hiding (info)
   import System.Serverman.Actions.Env
   import System.Serverman.Actions.Repository
   import System.Serverman.Types
+  import System.Serverman.Log
 
   import System.IO.Error
   import System.Process
@@ -20,6 +21,7 @@ module System.Serverman.Actions.Install (installService) where
 
   installService :: Service -> App ()
   installService s@(Service { dependencies, packages }) = do
+    done <- progress
     (AppState { os }) <- get
 
     deps <- catMaybes <$> mapM findService dependencies
@@ -33,11 +35,11 @@ module System.Serverman.Actions.Install (installService) where
 
     process <- liftedAsync $ do
       result <- executeRoot (fst base) (snd base ++ pkg) "" True
+      done
 
       case result of
         Left err -> return ()
-        Right _ -> do
-          liftIO $ putStrLn $ "installed " ++ show s ++ "."
+        Right _ -> info $ "installed " ++ show s
       
     liftIO $ wait process
     return ()

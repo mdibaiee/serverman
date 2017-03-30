@@ -12,9 +12,11 @@ module System.Serverman.Actions.Remote ( runRemotely
   import Control.Monad
   import Data.Maybe
   import Control.Monad.State hiding (liftIO)
+  import Control.Concurrent
   import Data.IORef
   import Data.Either
-  import Control.Concurrent
+
+  actionDelay = 1000000
 
   runRemotely :: Address -> App r -> App ()
   runRemotely addr@(Address host port user) action = do
@@ -41,15 +43,13 @@ module System.Serverman.Actions.Remote ( runRemotely
     liftIO $ createDirectoryIfMissing True path
 
     -- check if a connection to SSH server using public key is possible
-    -- result <- execRemote servermanAddr (Just keyPath) Nothing "" "echo" [] "" Nothing False
     execute "fusermount" ["-u", path] "" False
-    result <- execute "sshfs" (p ++ noPassword ++ uid ++ options ++ ["-o", "IdentityFile=" ++ keyPath, smConnection ++ ":/", path]) "" True
-
-    liftIO $ threadDelay 500
+    result <- execute "sshfs" (p ++ noPassword ++ uid ++ options ++ ["-o", "IdentityFile=" ++ keyPath, smConnection ++ ":/", path]) "" False
 
     case result of
       Right _ -> do
         state <- get
+        liftIO $ threadDelay actionDelay
         put $ state { remoteMode = Just (servermanAddr, keyPath) }
         getOS
         action

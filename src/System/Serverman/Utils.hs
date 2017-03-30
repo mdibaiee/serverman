@@ -9,6 +9,7 @@ module System.Serverman.Utils ( App (..)
                               , splitAtElem
                               , semicolon
                               , block
+                              , mkHelp
                               , indent
                               , commas
                               , quote
@@ -23,8 +24,9 @@ module System.Serverman.Utils ( App (..)
                               , execute
                               , execRemote
                               , Address (..)
-                              , liftedAsync
                               , liftIO
+                              , usingPort
+                              , clearPort
                               , restartService
                               , getPassword
                               , executeRoot) where
@@ -34,7 +36,7 @@ module System.Serverman.Utils ( App (..)
   import System.Directory
   import System.FilePath
   import System.Process
-  import System.IO.Error
+  import System.IO.Error (tryIOError)
   import Control.Concurrent.Async
   import Data.List
   import Control.Exception
@@ -47,31 +49,90 @@ module System.Serverman.Utils ( App (..)
   import System.Posix.Env
   import qualified Control.Monad.State as ST
   import Control.Monad.State hiding (liftIO)
-  import Control.Monad.Trans.Control
   import Data.Default.Class
   import System.Unix.Chroot
-  import Control.Monad.Catch
+  import Control.Concurrent
+  import Control.Monad.Loops
 
   import System.Serverman.Types
+  import System.Serverman.Log
+  import Debug.Trace
 
-  liftIO :: (MonadIO m, MonadState AppState m, MonadMask m) => IO a -> m a
-  {-liftIO :: IO a -> App a-}
+  -- lift IO to App, also applying remote mode and port forwarding:
+  --   if in remote mode, chroot actions to the SSHFS directory
+  --   forward ports declared by `usingPort`
+  liftIO :: IO a -> App a
   liftIO action = do
-    state@(AppState { remoteMode }) <- get
+    state@(AppState { remoteMode, ports }) <- get
+    verbose $ "liftIO " ++ show remoteMode ++ ", " ++ show ports
 
     case remoteMode of
       Nothing -> ST.liftIO action
 
-      Just (Address host port user, _) -> do
+      Just rm@(Address host port user, key) -> do
         tmp <- ST.liftIO getTemporaryDirectory
         let path = tmp </> (user ++ "@" ++ host)
         
-        fchroot path $ ST.liftIO action
+        verbose $ "forwarding ports"
+        mapM_ (portForward rm) ports
 
+        verbose $ "chroot directory " ++ path
+
+        fchroot path $ ST.liftIO action
+    where
+      portForward (Address host port user, key) (source, destination) = do
+        let forward = source ++ ":" ++ host ++ ":" ++ destination
+            connection = user ++ "@" ++ host ++ (if null port then "" else " -p " ++ port)
+            identity = " -o IdentityFile=" ++ key
+
+        (_, _, _, handle) <- ST.liftIO $ runInteractiveCommand $ "ssh -L " ++ forward ++ " " ++ connection ++ identity
+
+        state@(AppState { processes }) <- get
+        put $ state { processes = handle:processes }
+        return ()
+
+  -- take and return a port from open port pool, forwarding the specified port to that port
+  -- this allows connections to ports on a remote server
+  usingPort :: String -> App String
+  usingPort port = do
+    state@(AppState { ports, remoteMode }) <- get
+
+    case remoteMode of
+      Nothing -> return port
+      Just _ -> do
+        available <- head <$> dropWhileM checkPort range
+        put $ state { ports = (available, port):ports }
+        return available
+    where
+      range = map show [8000..9999]
+
+  -- clear a port
+  clearPort :: String -> App ()
+  clearPort port = do
+    state@(AppState { ports, remoteMode }) <- get
+    let newPorts = filter ((/= port) . fst) ports
+    put $ state { ports = newPorts }
+    return ()
+
+  -- check whether a port is open or not
+  checkPort :: String -> App Bool
+  checkPort port = do
+    result <- execute "netstat" ["-an", "|", "grep", port] "" False
+    case result of
+      Left _ -> return False
+      Right output ->
+        if (not . null) output then
+          return True
+        else
+          return False
+
+  -- generates a string in format `<key><delimiter><value>\n`
+  -- e.g. |keyvalue [("first", "line"), ("second", "one")] "="| outputs "first=line\nsecond=one"
   keyvalue :: [(String, String)] -> String -> String
   keyvalue ((a, b):xs) delimit = a ++ delimit ++ b ++ "\n" ++ keyvalue xs delimit
   keyvalue [] _ = ""
 
+  -- parse a `<key><delimiter><value>` string into a list of (key, value) pairs
   parseKeyValue :: String -> Char -> [(String, String)]
   parseKeyValue text delimit = map parsePair (lines text)
     where
@@ -80,6 +141,7 @@ module System.Serverman.Utils ( App (..)
             (key, value) = splitAt delimitIndex line
         in (key, tail value)
 
+  -- split string at character
   splitAtElem :: String -> Char -> [String]
   splitAtElem "" _ = []
   splitAtElem str char =
@@ -91,21 +153,27 @@ module System.Serverman.Utils ( App (..)
     where
       charIndex = char `elemIndex` str
 
+  -- add a semicolon to end of each line in string
   semicolon :: String -> String
   semicolon text = unlines $ map (++ ";") (lines text)
 
+  -- create a block with the following format: `<name> {\n<content>\n}`
+  -- content is |indent|ed
   block :: String -> String -> String
   block blockName content = blockName ++ " {\n" ++ indent content ++ "}"
 
+  -- alias for |intercalate ", "|
   commas :: [String] -> String
-  commas text = intercalate ", " text
+  commas = intercalate ", "
 
+  -- execute an action if a path is missing
   execIfMissing :: (Applicative f, Monad f, MonadIO f) => FilePath -> f () -> f ()
   execIfMissing path action = do
     exists <- ST.liftIO $ doesPathExist path
     
     when (not exists) action
 
+  -- execute an action if a path exists
   execIfExists :: (Applicative f, Monad f, MonadIO f) => FilePath -> f () -> f ()
   execIfExists path action = do
     exists <- ST.liftIO $ doesPathExist path
@@ -118,6 +186,7 @@ module System.Serverman.Utils ( App (..)
   renameFileIfMissing :: FilePath -> String -> IO ()
   renameFileIfMissing path content = execIfMissing content (renameFile path content)
 
+  -- append a line after a specific string
   appendAfter :: String -> String -> String -> String
   appendAfter content after line =
     let ls = lines content
@@ -125,9 +194,11 @@ module System.Serverman.Utils ( App (..)
 
     in unlines appended
 
+  -- indent all lines forward using \t
   indent :: String -> String
   indent s = unlines $ map ("\t" ++) (lines s)
 
+  -- put single quotes around a text
   quote :: String -> String
   quote input = "'" ++ input ++ "'"
 
@@ -142,38 +213,49 @@ module System.Serverman.Utils ( App (..)
   execute :: String -> [String] -> String -> Bool -> App (Either String String)
   execute cmd args stdin logErrors = exec cmd args stdin Nothing logErrors
 
+  -- execute a command in operating system
+  -- if in remote mode, runs `execRemote`
   exec :: String -> [String] -> String -> Maybe FilePath -> Bool -> App (Either String String)
   exec cmd args stdin cwd logErrors = do
+    verbose $ "exec: " ++ cmd ++ " " ++ show args
     (AppState { remoteMode }) <- get
 
     if isJust remoteMode then do
       let (addr, key) = fromJust remoteMode
 
       execRemote addr (Just key) (Just "serverman") "" cmd args stdin cwd logErrors
-    else liftIO $ do
+    else do
       let command = escape $ cmd ++ " " ++ intercalate " " args
           cp = (proc (escape cmd) (map escape args)) { cwd = cwd }
 
-      process <- async $ do
-        result <- tryIOError $ readCreateProcessWithExitCode cp stdin
+      verbose $ "executing command " ++ command
+
+      process <- liftedAsync $ do
+        result <- liftIO . tryIOError $ readCreateProcessWithExitCode cp stdin
+        verbose "command executed"
 
         case result of
-          Right (ExitSuccess, stdout, _) -> return $ Right stdout
+          Right (ExitSuccess, stdout, _) -> do
+            verbose $ "command successful: " ++ stdout
+            return $ Right stdout
 
           Right (ExitFailure code, stdout, stderr) -> do
+            when (not logErrors) $ verbose $ "command failed: " ++ show code ++ ", stderr: " ++ stderr
             when logErrors $ do
-              putStrLn $ "exit code: " ++ show code
-              putStrLn stdout
-              putStrLn stderr
-              putStrLn $ commandError command
+              err command
+              err $ "exit code: " ++ show code
+              err stdout
+              err stderr
             return $ Left stdout
-          Left err -> do
+          Left e -> do
+            when (not logErrors) $ verbose $ "couldn't execute command: " ++ show e
             when logErrors $ do
-              putStrLn $ show err
-              putStrLn $ commandError command
-            return $ Left (show err)
+              err command
+              err $ show e
+            return $ Left (show e)
 
-      wait process
+      (result, _) <- liftIO $ wait process
+      return result
 
     where
       escape :: String -> String
@@ -181,37 +263,56 @@ module System.Serverman.Utils ( App (..)
         where
           specialCharacters = ["$"]
 
+  -- run a command on a server using SSH
   execRemote :: Address -> Maybe String -> Maybe String -> String -> String -> [String] -> String -> Maybe String -> Bool -> App (Either String String)
   execRemote addr@(Address host port user) maybeKey maybeUser password cmd args stdin cwd logErrors = do
-    tmp <- liftIO getTemporaryDirectory
+    tmp <- ST.liftIO getTemporaryDirectory
     let passwordFile = tmp </> "pw"
 
-    let userArgument = if isJust maybeUser then ["echo", password, "|", "sudo -S", "-u", fromJust maybeUser] else []
-        keyArgument = if isJust maybeKey then ["-o", "IdentityFile=" ++ fromJust maybeKey] ++ noPassword else noKey
+    let userArgument = case maybeUser of
+                         Just user -> if (not . null) password then
+                                        ["echo", password, "|", "sudo -S", "-u", user]
+                                      else
+                                        ["sudo -u", user]
+                         Nothing -> []
+        keyArgument = case maybeKey of
+                        Just key -> 
+                          ["-o", "IdentityFile=" ++ key] ++ noPassword
+                        Nothing -> noKey
+
         p = if null port then [] else ["-p", port]
         connection = takeWhile (/= ':') (show addr)
 
         cumulated = p ++ keyArgument ++ options
         command = userArgument ++ ["sh -c \"", cmd] ++ args ++ ["\""]
+        complete = "ssh" : (cumulated ++ [connection] ++ command)
 
-    (backupEnv, passwordFile) <- liftIO $ do
-      backupEnv <- getEnvironment 
+    verbose $ "backing up environment variables"
+    backupEnv <- ST.liftIO getEnvironment
 
-      writeFile passwordFile $ "echo " ++ password
-      setFileMode passwordFile accessModes
-      setEnv "SSH_ASKPASS" passwordFile True
-
-      return (backupEnv, passwordFile)
+    verbose $ "writing passwordFile for SSH " ++ passwordFile
+    when (not . null $ password) $ 
+      ST.liftIO $ do
+        writeFile passwordFile $ "echo " ++ password
+        setFileMode passwordFile accessModes
+        setEnv "SSH_ASKPASS" passwordFile True
 
     state <- get
     let (AppState { remoteMode = backup }) = state
     put $ state { remoteMode = Nothing }
-    result <- exec "setsid" ("ssh" : cumulated ++ [connection] ++ command) stdin cwd logErrors
+
+    verbose $ "executing command in remote " ++ show complete
+
+    newEnv <- liftIO getEnvironment
+    verbose $ "env " ++ keyvalue newEnv "="
+
+    result <- exec "setsid" complete stdin cwd logErrors
     put $ state { remoteMode = backup }
 
-    liftIO $ do
+    verbose $ "reseting environment and deleting password file"
+    ST.liftIO $ do
       setEnvironment backupEnv
-      removeFile passwordFile
+      execIfExists passwordFile $ removeFile passwordFile
 
     return result
     where
@@ -219,6 +320,7 @@ module System.Serverman.Utils ( App (..)
       noKey = ["-o", "PubkeyAuthentication=no", "-o", "PasswordAuthentication=yes"]
       options = ["-o", "StrictHostKeyChecking=no"]
 
+  -- replace in string
   replace :: String -> String -> String -> String
   replace str replacable alt =
     foldl' rep "" str
@@ -232,11 +334,15 @@ module System.Serverman.Utils ( App (..)
       dropEnd n = reverse . drop n . reverse
 
   restartService :: String -> App (Either String String)
-  restartService service = executeRoot "systemctl" ["restart", service] "" True
+  restartService service = do
+    verbose $ "restarting service " ++ service
+    executeRoot "systemctl" ["restart", service] "" True
 
+  -- execute using sudo
   executeRoot :: String -> [String] -> String -> Bool -> App (Either String String)
   executeRoot cmd args stdin logErrors = execute "sudo" (cmd:args) stdin logErrors
 
+  -- read password from user input (don't show the input)
   getPassword :: IO String
   getPassword = do
     tc <- getTerminalAttributes stdInput
@@ -245,5 +351,10 @@ module System.Serverman.Utils ( App (..)
     setTerminalAttributes stdInput tc Immediately
     return password
 
-  liftedAsync :: MonadBaseControl IO m => m a -> m (Async (StM m a))
-  liftedAsync m = liftBaseWith $ \runInIO -> async (runInIO m)
+  -- make tabularized help string
+  mkHelp :: String -> [(String, String)] -> String
+  mkHelp name entries = name ++ "\n" ++ 
+                          indent (keyvalue tabularized " ")
+    where
+      maxKey = maximum $ map (length . fst) entries
+      tabularized = map (\(key, value) -> (key ++ (replicate (maxKey - length key + 1) ' '), value)) entries

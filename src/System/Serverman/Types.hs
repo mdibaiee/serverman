@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module System.Serverman.Types ( Service (..)
                               , Repository
@@ -8,10 +9,14 @@ module System.Serverman.Types ( Service (..)
                               , App
                               , Address (..)
                               , Params
-                              , runApp) where
+                              , runApp
+                              , liftedAsync) where
   import Data.Default.Class
   import GHC.Generics
   import Control.Monad.State
+  import Control.Concurrent.Async
+  import Control.Monad.Trans.Control
+  import System.Process
 
   type Host = String
   type Port = String
@@ -71,12 +76,29 @@ module System.Serverman.Types ( Service (..)
 
   type Repository = [Service]
 
+  type SourcePort = String
+  type DestinationPort = String
   data AppState = AppState { remoteMode    :: Maybe (Address, String)
                            , repository    :: Repository
                            , repositoryURL :: String
                            , os            :: OS
                            , arguments     :: [(String, Maybe String)]
-                           } deriving (Show)
+                           , helpArg       :: Bool
+                           , verboseMode   :: Bool
+                           , ports         :: [(SourcePort, DestinationPort)]
+                           , processes     :: [ProcessHandle]
+                           }
+
+  instance Show AppState where
+    show (AppState { remoteMode, repository, repositoryURL, os, arguments, ports, processes }) = 
+      "remote: " ++ show remoteMode ++ "\n" ++
+      "repository:\n" ++
+      "  - url: " ++ show repositoryURL ++ "\n" ++
+      "  - packages: " ++ show repository ++ "\n" ++
+      "operating system: " ++ show os ++ "\n" ++
+      "arguments: " ++ show arguments ++ "\n" ++
+      "port forwarding: " ++ show ports ++ "\n" ++
+      "processes: " ++ show (length processes)
 
   instance Default AppState where
     def = AppState { remoteMode    = Nothing
@@ -84,9 +106,16 @@ module System.Serverman.Types ( Service (..)
                    , repositoryURL = "https://github.com/mdibaiee/serverman-repository"
                    , os            = Unknown
                    , arguments     = []
+                   , helpArg       = False
+                   , verboseMode   = False
+                   , ports         = []
+                   , processes     = []
                    }
   type App = StateT AppState IO
 
   runApp :: App a -> IO (a, AppState)
   runApp k = runStateT k def
+
+  liftedAsync :: MonadBaseControl IO m => m a -> m (Async (StM m a))
+  liftedAsync m = liftBaseWith $ \runInIO -> async (runInIO m)
 

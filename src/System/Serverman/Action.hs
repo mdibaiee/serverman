@@ -4,6 +4,7 @@ module System.Serverman.Action ( ActionF(..)
                                , Action
                                , call
                                , fetchRepository
+                               , updateRepository
                                , start
                                , stop
                                , install
@@ -33,6 +34,7 @@ module System.Serverman.Action ( ActionF(..)
                  | Install Service x
                  | Remote [Address] (Action ()) x
                  | FetchRepository x
+                 | UpdateRepository x
                  | Start Service x
                  | Stop Service x
 
@@ -44,6 +46,7 @@ module System.Serverman.Action ( ActionF(..)
     fmap f (DetectOS x) = DetectOS (f x)
     fmap f (Remote addr action x) = Remote addr action (f x)
     fmap f (FetchRepository x) = FetchRepository (f x)
+    fmap f (UpdateRepository x) = UpdateRepository (f x)
 
   type Action = Free ActionF
 
@@ -67,3 +70,6 @@ module System.Serverman.Action ( ActionF(..)
 
   fetchRepository :: Action ()
   fetchRepository = liftF $ FetchRepository ()
+
+  updateRepository :: Action ()
+  updateRepository = liftF $ UpdateRepository ()

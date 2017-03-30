@@ -1,6 +1,7 @@
 module System.Serverman.Actions.Env (OS(..), getOS, releaseToOS) where
   import System.Serverman.Utils
   import System.Serverman.Types
+  import System.Serverman.Log
 
   import System.Process
   import Data.List
@@ -10,6 +11,8 @@ module System.Serverman.Actions.Env (OS(..), getOS, releaseToOS) where
   import Control.Monad.State
   
   getOS = do
+    verbose "detecting os"
+
     arch_release <- execute "cat" ["/etc/os-release"] "" False
     deb_release <- execute "cat" ["/etc/lsb-release"] "" False
 

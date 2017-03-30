@@ -4,6 +4,7 @@
 module System.Serverman.Actions.Call (callService) where
   import System.Serverman.Types
   import System.Serverman.Utils
+  import System.Serverman.Log
   import qualified System.Serverman.Actions.Repository
   import System.Serverman.Actions.Remote
 
@@ -14,10 +15,13 @@ module System.Serverman.Actions.Call (callService) where
   import System.Posix.Env
   import Data.List
   import Stack.Package
+  import Data.Maybe
 
   callService :: Service -> Maybe FilePath -> App ()
   callService s@(Service { name, version }) remote = do
-    state@(AppState { repositoryURL }) <- get
+    done <- progress
+
+    state@(AppState { repositoryURL, helpArg }) <- get
     put $ state { remoteMode = Nothing }
 
     dir <- liftIO $ getAppUserDataDirectory "serverman"
@@ -35,21 +39,39 @@ module System.Serverman.Actions.Call (callService) where
 
     (Right stackEnv) <- exec "stack" ["exec", "env", "--allow-different-user"] "" (Just path) True
     (Right stackSourceEnv) <- exec "stack" ["exec", "env", "--allow-different-user"] "" (Just source) True
+
     let finalEnv = map (mergeEnv $ parseKeyValue stackSourceEnv '=') (parseKeyValue stackEnv '=')
 
     backupEnv <- liftIO $ getEnvironment
     liftIO $ setEnvironment finalEnv
 
-    func <- liftIO $ runInterpreter (interpreter include entry)
+    func <- liftIO $ runInterpreter (getCall include entry)
+    helpOutput <- liftIO $ runInterpreter (getHelp include entry)
 
-    case func of
-      Right fn -> handleRemote remote $ fn s
-      Left err -> liftIO $ do
-        putStrLn $ "error reading `call` from module " ++ entry
-        case err of
-          WontCompile errs -> mapM_ (putStrLn . errMsg) errs
+    done
 
-          x -> print x
+    if helpArg then
+      case helpOutput of
+        Right fn -> write =<< fn
+        Left e -> do
+          write $ "could not find a help entry for " ++ name
+          case e of
+            WontCompile errs -> mapM_ (write . errMsg) errs
+
+            GhcException ie -> err ie
+            UnknownError ie -> err ie
+            NotAllowed ie -> err ie
+    else
+      case func of
+        Right fn -> handleRemote remote $ fn s
+        Left e -> do
+          err $ "couldn't read `call` from module " ++ entry
+          case e of
+            WontCompile errs -> mapM_ (write . errMsg) errs
+
+            GhcException ie -> err ie
+            UnknownError ie -> err ie
+            NotAllowed ie -> err ie
 
     liftIO $ setEnvironment backupEnv
 
@@ -62,15 +84,22 @@ module System.Serverman.Actions.Call (callService) where
       handleRemote _ action = action
 
       mergeEnv other (key, value)
-        | key `elem` ["GHC_PACKAGE_PATH", "HASKELL_PACKAGE_SANDBOXES"] = 
+        | key `elem` ["GHC_PACKAGE_PATH", "HASKELL_PACKAGE_SANDBOXES", "PATH"] = 
           let (Just alt) = lookup key other
           in (key, value ++ ":" ++ alt)
+        | key == "LD_PRELOAD" = (key, "")
         | otherwise = (key, value)
 
-  interpreter :: [FilePath] -> FilePath -> Interpreter (Service -> App ())
-  interpreter path entry = do
+  getCall :: [FilePath] -> FilePath -> Interpreter (Service -> App ())
+  getCall path entry = do
     set [searchPath := path]
     loadModules [entry]
     setTopLevelModules ["Main"]
     interpret "call" (as :: Service -> App ())
 
+  getHelp :: [FilePath] -> FilePath -> Interpreter (App String)
+  getHelp path entry = do
+    set [searchPath := path]
+    loadModules [entry]
+    setTopLevelModules ["Main"]
+    interpret "help" (as :: App String)

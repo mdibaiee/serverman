@@ -30,5 +30,6 @@ module System.Serverman ( run
 
   run (Free (Remote addrs action next)) = mapM_ (\addr -> runRemotely addr (run action)) addrs >> run next
 
-  run (Free (FetchRepository next)) = fetchRepo >> run next
+  run (Free (FetchRepository next)) = fetchRepo False >> run next
+  run (Free (UpdateRepository next)) = fetchRepo True >> run next
 
