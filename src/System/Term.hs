@@ -16,6 +16,7 @@ module System.Term ( initialize ) where
   import System.FilePath
   import Data.List
   import System.Process
+  import Control.Concurrent
 
   import System.Serverman.Utils hiding (liftIO)
   import System.Serverman.Actions.Repository
@@ -99,12 +100,19 @@ module System.Term ( initialize ) where
         _ -> servermanHelp
 
       -- after the program is done, terminate remaining processes
-      (S.AppState { S.processes }) <- get
+      -- and unmount/remove leftover temporary directories
+      state@(S.AppState { S.processes, S.temps }) <- get
+      put $ state { remoteMode = Nothing }
+
       mapM_ (liftIO . terminateProcess) processes
+      mapM_ clearTemp temps
 
     return ()
 
     where
+      clearTemp path = execIfExists path $ do
+        execute "fusermount" ["-u", path] "" False
+        liftIO $ removeDirectoryRecursive path
       -- if remote mode is set, read the file and run the action
       -- on servers, otherwise run action locally
       handleRemote (Params { remote = Just file }) action = do

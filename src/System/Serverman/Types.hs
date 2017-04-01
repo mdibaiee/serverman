@@ -87,10 +87,11 @@ module System.Serverman.Types ( Service (..)
                            , verboseMode   :: Bool
                            , ports         :: [(SourcePort, DestinationPort)]
                            , processes     :: [ProcessHandle]
+                           , temps         :: [FilePath]
                            }
 
   instance Show AppState where
-    show (AppState { remoteMode, repository, repositoryURL, os, arguments, ports, processes }) = 
+    show (AppState { remoteMode, repository, repositoryURL, os, arguments, ports, processes, temps, verboseMode }) = 
       "remote: " ++ show remoteMode ++ "\n" ++
       "repository:\n" ++
       "  - url: " ++ show repositoryURL ++ "\n" ++
@@ -98,7 +99,9 @@ module System.Serverman.Types ( Service (..)
       "operating system: " ++ show os ++ "\n" ++
       "arguments: " ++ show arguments ++ "\n" ++
       "port forwarding: " ++ show ports ++ "\n" ++
-      "processes: " ++ show (length processes)
+      "verbose: " ++ show verboseMode ++ "\n" ++
+      "processes: " ++ show (length processes) ++
+      "temps: " ++ show (length temps)
 
   instance Default AppState where
     def = AppState { remoteMode    = Nothing
@@ -110,6 +113,7 @@ module System.Serverman.Types ( Service (..)
                    , verboseMode   = False
                    , ports         = []
                    , processes     = []
+                   , temps         = []
                    }
   type App = StateT AppState IO
 

@@ -5,10 +5,10 @@ module System.Serverman.Log ( verbose
                             , info
                             , write
                             , progress
+                            , progressText
                             , warning
                             , err
-                            , die
-                            , progressListener) where
+                            , die) where
 
   import System.Serverman.Types
 
@@ -46,33 +46,46 @@ module System.Serverman.Log ( verbose
   die str = liftIO . E.die . format . bold . F.red $ read ("[fatal error] " ++ str)
 
   progress :: App (App ())
-  progress = do
+  progress = progressText "working"
+
+  clearLine :: IO ()
+  clearLine = do
+    putStr $ "\ESC[2K\ESC[0;"
+    hFlush stdout
+  
+  backward :: Int -> IO ()
+  backward n = do
+    putStr $ "\ESC[" ++ (show n) ++ "D\ESC[0;"
+
+  progressText :: String -> App (App ())
+  progressText str = do
     state <- get
-    p <- progressListener
+    p <- progressListener str
 
     return p
 
-
-  progressPrefix = "working "
   progressCharacters = [".  ", ".. ", "...", " ..", "  .", "   "]
   progressDelay = 200000
-  progressListener :: App (App ())
-  progressListener = do
+  progressListener :: String -> App (App ())
+  progressListener text = do
+    liftIO $ putStr $ replicate strLength '.'
+
     p <- liftedAsync $
       mapM start (cycle [0..length progressCharacters])
 
     return $ stop p
 
     where
+        strLength = 2 + length text + length (head progressCharacters)
         start n = do
           liftIO . threadDelay $ progressDelay
 
           liftedAsync $ do
-            let str = progressPrefix ++ (progressCharacters !! n)
+            let str = text ++ " " ++ (progressCharacters !! n)
 
             liftIO $ do
+              backward strLength
               putStr . format . (light . F.blue) $ read str
-              putStr $ "\ESC[" ++ (show $ length str) ++ "D\ESC[0;"
               hFlush stdout
 
             return ()
@@ -80,4 +93,5 @@ module System.Serverman.Log ( verbose
         stop process = do
           liftIO $ do
             cancel process
-            putStr "\ESC[0;"
+            backward strLength
+            clearLine

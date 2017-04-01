@@ -21,7 +21,7 @@ module System.Serverman.Actions.Install (installService) where
 
   installService :: Service -> App ()
   installService s@(Service { dependencies, packages }) = do
-    done <- progress
+    done <- progressText $ "installing " ++ show s
     (AppState { os }) <- get
 
     deps <- catMaybes <$> mapM findService dependencies
@@ -33,13 +33,11 @@ module System.Serverman.Actions.Install (installService) where
           _ -> ("echo", ["Unknown operating system"])
         pkg = packageByOS s os
 
-    process <- liftedAsync $ do
-      result <- executeRoot (fst base) (snd base ++ pkg) "" True
-      done
+    result <- executeRoot (fst base) (snd base ++ pkg) "" True
+    done
 
-      case result of
-        Left err -> return ()
-        Right _ -> info $ "installed " ++ show s
-      
-    liftIO $ wait process
+    case result of
+      Left err -> return ()
+      Right _ -> info $ "installed " ++ show s
+
     return ()

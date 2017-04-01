@@ -3,7 +3,7 @@
 
 module System.Serverman.Actions.Call (callService) where
   import System.Serverman.Types
-  import System.Serverman.Utils
+  import System.Serverman.Utils hiding (liftIO)
   import System.Serverman.Log
   import qualified System.Serverman.Actions.Repository
   import System.Serverman.Actions.Remote
@@ -11,7 +11,7 @@ module System.Serverman.Actions.Call (callService) where
   import System.Directory
   import System.FilePath
   import Language.Haskell.Interpreter hiding (get, name, liftIO)
-  import Control.Monad.State hiding (liftIO)
+  import Control.Monad.State
   import System.Posix.Env
   import Data.List
   import Stack.Package
@@ -19,7 +19,7 @@ module System.Serverman.Actions.Call (callService) where
 
   callService :: Service -> Maybe FilePath -> App ()
   callService s@(Service { name, version }) remote = do
-    done <- progress
+    done <- progressText $ "running service " ++ show s
 
     state@(AppState { repositoryURL, helpArg }) <- get
     put $ state { remoteMode = Nothing }

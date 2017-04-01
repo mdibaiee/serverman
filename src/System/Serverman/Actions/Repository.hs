@@ -3,7 +3,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 module System.Serverman.Actions.Repository (fetchRepo, findService) where
-  import System.Serverman.Utils
+  import System.Serverman.Utils hiding (liftIO)
   import System.Directory
   import System.Serverman.Services hiding (info)
   import System.Serverman.Actions.Env
@@ -17,7 +17,7 @@ module System.Serverman.Actions.Repository (fetchRepo, findService) where
   import Data.Aeson.Types
   import GHC.Generics
   import qualified Data.Map as M
-  import Control.Monad.State hiding (liftIO)
+  import Control.Monad.State
   import qualified Data.ByteString.Lazy.Char8 as BS
   import qualified Data.Text as T
   import Data.List
@@ -41,22 +41,38 @@ module System.Serverman.Actions.Repository (fetchRepo, findService) where
 
     execIfMissing path $ do
       verbose "repository missing... cloning repository"
+
+      done <- progressText "downloading repository"
+
       info $ "cloning " ++ repositoryURL ++ " in " ++ path
       execute "git" ["clone", repositoryURL, path] "" True
+
+      done
+      info $ "downloaded repository"
       return ()
 
     execIfMissing source $ do
       verbose "serverman source missing... cloning repository"
 
+      done <- progressText "downloading serverman source"
+
       info $ "cloning " ++ sourceURL ++ " in " ++ source
       execute "git" ["clone", sourceURL, source] "" True
+
+      done
+      info $ "downloaded serverman source"
       return ()
 
     when update $ do
       verbose "updating repository"
 
+      done <- progressText "updating repository"
+
       exec "git" ["pull", "origin", "master"] "" (Just path) True
       exec "git" ["pull", "origin", "master"] "" (Just source) True
+
+      done
+      info $ "updated repository"
       return ()
 
     content <- liftIO $ readFile (path </> "repository.json")

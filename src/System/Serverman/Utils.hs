@@ -18,7 +18,6 @@ module System.Serverman.Utils ( App (..)
                               , execIfExists
                               , writeFileIfMissing
                               , renameFileIfMissing
-                              , commandError
                               , appendAfter
                               , exec
                               , execute
@@ -40,7 +39,7 @@ module System.Serverman.Utils ( App (..)
   import Control.Concurrent.Async
   import Data.List
   import Control.Exception
-  import System.Exit
+  import System.Exit hiding (die)
   import Data.Maybe
   import System.Posix.Terminal
   import System.Posix.IO (stdInput)
@@ -50,6 +49,7 @@ module System.Serverman.Utils ( App (..)
   import qualified Control.Monad.State as ST
   import Control.Monad.State hiding (liftIO)
   import Data.Default.Class
+  import Control.Monad.Catch (catchIOError)
   import System.Unix.Chroot
   import Control.Concurrent
   import Control.Monad.Loops
@@ -78,7 +78,9 @@ module System.Serverman.Utils ( App (..)
 
         verbose $ "chroot directory " ++ path
 
-        fchroot path $ ST.liftIO action
+        catchIOError 
+          (fchroot path $ ST.liftIO action)
+          (\e -> err (show e) >> (ST.liftIO $ threadDelay 1000000) >> liftIO action)
     where
       portForward (Address host port user, key) (source, destination) = do
         let forward = source ++ ":" ++ host ++ ":" ++ destination
@@ -101,6 +103,9 @@ module System.Serverman.Utils ( App (..)
       Nothing -> return port
       Just _ -> do
         available <- head <$> dropWhileM checkPort range
+
+        verbose $ "using port " ++ available ++ " in place of " ++ port
+
         put $ state { ports = (available, port):ports }
         return available
     where
@@ -109,6 +114,7 @@ module System.Serverman.Utils ( App (..)
   -- clear a port
   clearPort :: String -> App ()
   clearPort port = do
+    verbose $ "freed port " ++ port
     state@(AppState { ports, remoteMode }) <- get
     let newPorts = filter ((/= port) . fst) ports
     put $ state { ports = newPorts }
@@ -207,9 +213,6 @@ module System.Serverman.Utils ( App (..)
     | (reverse . take 1 . reverse) input == "\n" = take (length input - 1) input
     | otherwise = input
 
-  commandError :: String -> String
-  commandError command = "[Error] an error occured while running: " ++ command ++ "\nplease try running the command manually."
-
   execute :: String -> [String] -> String -> Bool -> App (Either String String)
   execute cmd args stdin logErrors = exec cmd args stdin Nothing logErrors
 
@@ -223,39 +226,35 @@ module System.Serverman.Utils ( App (..)
     if isJust remoteMode then do
       let (addr, key) = fromJust remoteMode
 
-      execRemote addr (Just key) (Just "serverman") "" cmd args stdin cwd logErrors
+      execRemote addr (Just key) Nothing "" cmd args stdin cwd logErrors
     else do
       let command = escape $ cmd ++ " " ++ intercalate " " args
           cp = (proc (escape cmd) (map escape args)) { cwd = cwd }
 
-      verbose $ "executing command " ++ command
+      verbose $ "executing command |" ++ command ++ "|"
 
-      process <- liftedAsync $ do
-        result <- liftIO . tryIOError $ readCreateProcessWithExitCode cp stdin
-        verbose "command executed"
+      result <- ST.liftIO . tryIOError $ readCreateProcessWithExitCode cp stdin
+      verbose "command executed"
 
-        case result of
-          Right (ExitSuccess, stdout, _) -> do
-            verbose $ "command successful: " ++ stdout
-            return $ Right stdout
+      case result of
+        Right (ExitSuccess, stdout, _) -> do
+          verbose $ "command successful: " ++ stdout
+          return $ Right stdout
 
-          Right (ExitFailure code, stdout, stderr) -> do
-            when (not logErrors) $ verbose $ "command failed: " ++ show code ++ ", stderr: " ++ stderr
-            when logErrors $ do
-              err command
-              err $ "exit code: " ++ show code
-              err stdout
-              err stderr
-            return $ Left stdout
-          Left e -> do
-            when (not logErrors) $ verbose $ "couldn't execute command: " ++ show e
-            when logErrors $ do
-              err command
-              err $ show e
-            return $ Left (show e)
-
-      (result, _) <- liftIO $ wait process
-      return result
+        Right (ExitFailure code, stdout, stderr) -> do
+          when (not logErrors) $ verbose $ "command failed: " ++ show code ++ ", stderr: " ++ stderr
+          when logErrors $ do
+            err command
+            err $ "exit code: " ++ show code
+            err stdout
+            err stderr
+          return $ Left stdout
+        Left e -> do
+          when (not logErrors) $ verbose $ "couldn't execute command: " ++ show e
+          when logErrors $ do
+            err command
+            err $ show e
+          return $ Left (show e)
 
     where
       escape :: String -> String
@@ -271,9 +270,9 @@ module System.Serverman.Utils ( App (..)
 
     let userArgument = case maybeUser of
                          Just user -> if (not . null) password then
-                                        ["echo", password, "|", "sudo -S", "-u", user]
+                                        ["echo", password, "|", "sudo", "-S", "-u", user]
                                       else
-                                        ["sudo -u", user]
+                                        ["sudo", "-u", user]
                          Nothing -> []
         keyArgument = case maybeKey of
                         Just key -> 
@@ -285,13 +284,13 @@ module System.Serverman.Utils ( App (..)
 
         cumulated = p ++ keyArgument ++ options
         command = userArgument ++ ["sh -c \"", cmd] ++ args ++ ["\""]
-        complete = "ssh" : (cumulated ++ [connection] ++ command)
+        complete = "-w" : "ssh" : (cumulated ++ [connection] ++ (intersperse " " command))
 
     verbose $ "backing up environment variables"
     backupEnv <- ST.liftIO getEnvironment
 
-    verbose $ "writing passwordFile for SSH " ++ passwordFile
-    when (not . null $ password) $ 
+    when (not . null $ password) $ do
+      verbose $ "writing passwordFile for SSH " ++ passwordFile ++ " and setting SSH_ASKPASS"
       ST.liftIO $ do
         writeFile passwordFile $ "echo " ++ password
         setFileMode passwordFile accessModes
@@ -301,10 +300,7 @@ module System.Serverman.Utils ( App (..)
     let (AppState { remoteMode = backup }) = state
     put $ state { remoteMode = Nothing }
 
-    verbose $ "executing command in remote " ++ show complete
-
-    newEnv <- liftIO getEnvironment
-    verbose $ "env " ++ keyvalue newEnv "="
+    verbose $ "executing command |setsid " ++ show complete ++ "|"
 
     result <- exec "setsid" complete stdin cwd logErrors
     put $ state { remoteMode = backup }
