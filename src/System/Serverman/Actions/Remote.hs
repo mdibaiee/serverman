@@ -1,7 +1,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 module System.Serverman.Actions.Remote ( runRemotely
-                                       , Address) where
+                                       , Address
+                                       , unmountPath) where
   import System.Serverman.Utils hiding (liftIO)
   import System.Serverman.Actions.Env
   import System.Serverman.Log
@@ -22,8 +23,18 @@ module System.Serverman.Actions.Remote ( runRemotely
 
   actionDelay = 1000000
 
+  unmountPath :: Address -> App ()
+  unmountPath addr@(Address host port user) = do
+    tmp <- liftIO getTemporaryDirectory
+
+    let path = tmp </> ("serverman@" ++ host)
+
+    execute "fusermount" ["-u", path] "" False
+    return ()
+
   runRemotely :: Address -> App r -> App ()
   runRemotely addr@(Address host port user) action = do
+    verbose $ "running action remotely on " ++ show addr
     done <- progressText $ "connecting to server " ++ show addr
 
     tmp <- liftIO getTemporaryDirectory
@@ -58,7 +69,7 @@ module System.Serverman.Actions.Remote ( runRemotely
 
         result <- execute "sshfs" (p ++ noPassword ++ uid ++ options ++ ["-o", "IdentityFile=" ++ keyPath, smConnection ++ ":/", path]) "" False
 
-        state@(AppState { temps }) <- get
+        state@AppState { temps } <- get
         put $ state { temps = path:temps }
 
         return result
@@ -71,8 +82,7 @@ module System.Serverman.Actions.Remote ( runRemotely
     case result of
       Right _ -> do
         state <- get
-        liftIO $ do
-          threadDelay actionDelay
+        liftIO $ threadDelay actionDelay
 
         put $ state { remoteMode = Just (servermanAddr, keyPath) }
         getOS
@@ -82,10 +92,10 @@ module System.Serverman.Actions.Remote ( runRemotely
 
       Left e -> do
         info $ "it seems to be the first time you are using serverman for configuring " ++ show addr
-        write $ "remotely. serverman will create a user, and add it to sudoers file. an ssh key will be created"
-        write $ "and that will be used for connecting to the server from now on"
-        write $ "you will not be prompted for a password to connect to server with"
-        write $ "please enable password authentication temporarily on your server for this step"
+        write "remotely. serverman will create a user, and add it to sudoers file. an ssh key will be created"
+        write "and that will be used for connecting to the server from now on"
+        write "you will not be prompted for a password to connect to server with"
+        write "please enable password authentication temporarily on your server for this step"
 
         write $ "Enter password for " ++ connection
 
@@ -94,7 +104,7 @@ module System.Serverman.Actions.Remote ( runRemotely
 
         done <- progressText $ "setting up serverman user in server " ++ show addr
 
-        execIfMissing keyPath $ execute "ssh-keygen" ["-N", "", "-f", keyPath] "" True >> return ()
+        execIfMissing keyPath $ void $ execute "ssh-keygen" ["-N", "", "-f", keyPath] "" True
 
         publicKey <- liftIO $ readFile pubPath
 

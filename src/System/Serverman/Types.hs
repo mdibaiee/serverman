@@ -71,7 +71,7 @@ module System.Serverman.Types ( Service (..)
     readsPrec _ service = [(Service { name = service }, [])]
 
   instance Show Service where
-    show (Service { name, version }) =
+    show Service { name, version } =
       name ++ "@" ++ version
 
   type Repository = [Service]
@@ -91,7 +91,7 @@ module System.Serverman.Types ( Service (..)
                            }
 
   instance Show AppState where
-    show (AppState { remoteMode, repository, repositoryURL, os, arguments, ports, processes, temps, verboseMode }) = 
+    show AppState { remoteMode, repository, repositoryURL, os, arguments, ports, processes, temps, verboseMode } = 
       "remote: " ++ show remoteMode ++ "\n" ++
       "repository:\n" ++
       "  - url: " ++ show repositoryURL ++ "\n" ++

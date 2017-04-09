@@ -18,10 +18,10 @@ module System.Serverman.Actions.Call (callService) where
   import Data.Maybe
 
   callService :: Service -> Maybe FilePath -> App ()
-  callService s@(Service { name, version }) remote = do
+  callService s@Service { name, version } remote = do
     done <- progressText $ "running service " ++ show s
 
-    state@(AppState { repositoryURL, helpArg }) <- get
+    state@AppState { repositoryURL, helpArg } <- get
     put $ state { remoteMode = Nothing }
 
     dir <- liftIO $ getAppUserDataDirectory "serverman"
@@ -42,7 +42,7 @@ module System.Serverman.Actions.Call (callService) where
 
     let finalEnv = map (mergeEnv $ parseKeyValue stackSourceEnv '=') (parseKeyValue stackEnv '=')
 
-    backupEnv <- liftIO $ getEnvironment
+    backupEnv <- liftIO getEnvironment
     liftIO $ setEnvironment finalEnv
 
     func <- liftIO $ runInterpreter (getCall include entry)
@@ -79,7 +79,7 @@ module System.Serverman.Actions.Call (callService) where
 
     where
       handleRemote (Just file) action = do
-        list <- liftIO $ map read . lines <$> readFile file
+        list <- liftIO $ map read . filter (not . null) . lines <$> readFile file
         mapM_ (`runRemotely` action) list
       handleRemote _ action = action
 
@@ -92,14 +92,15 @@ module System.Serverman.Actions.Call (callService) where
 
   getCall :: [FilePath] -> FilePath -> Interpreter (Service -> App ())
   getCall path entry = do
-    set [searchPath := path]
-    loadModules [entry]
-    setTopLevelModules ["Main"]
+    initializeInterpreter path entry
     interpret "call" (as :: Service -> App ())
 
   getHelp :: [FilePath] -> FilePath -> Interpreter (App String)
   getHelp path entry = do
+    initializeInterpreter path entry
+    interpret "help" (as :: App String)
+
+  initializeInterpreter path entry = do
     set [searchPath := path]
     loadModules [entry]
     setTopLevelModules ["Main"]
-    interpret "help" (as :: App String)

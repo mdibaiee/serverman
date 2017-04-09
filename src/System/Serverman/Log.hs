@@ -25,9 +25,9 @@ module System.Serverman.Log ( verbose
 
   verbose :: String -> App ()
   verbose str = do
-    (AppState { verboseMode }) <- get
+    AppState { verboseMode } <- get
     liftIO $
-      when verboseMode $ do
+      when verboseMode $
         putStrLn . format . F.gray $ read ("[verbose] " ++ str)
 
   write :: String -> App ()
@@ -50,19 +50,15 @@ module System.Serverman.Log ( verbose
 
   clearLine :: IO ()
   clearLine = do
-    putStr $ "\ESC[2K\ESC[0;"
+    putStr "\ESC[2K\ESC[0;"
     hFlush stdout
   
   backward :: Int -> IO ()
-  backward n = do
-    putStr $ "\ESC[" ++ (show n) ++ "D\ESC[0;"
+  backward n =
+    putStr $ "\ESC[" ++ show n ++ "D\ESC[0;"
 
   progressText :: String -> App (App ())
-  progressText str = do
-    state <- get
-    p <- progressListener str
-
-    return p
+  progressText = progressListener
 
   progressCharacters = [".  ", ".. ", "...", " ..", "  .", "   "]
   progressDelay = 200000
@@ -85,12 +81,12 @@ module System.Serverman.Log ( verbose
 
             liftIO $ do
               backward strLength
-              putStr . format . (light . F.blue) $ read str
+              putStr . format . light . F.blue $ read str
               hFlush stdout
 
             return ()
 
-        stop process = do
+        stop process = 
           liftIO $ do
             cancel process
             backward strLength

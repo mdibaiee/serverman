@@ -40,7 +40,6 @@ module System.Serverman.Utils ( App (..)
   import Data.List
   import Control.Exception
   import System.Exit hiding (die)
-  import Data.Maybe
   import System.Posix.Terminal
   import System.Posix.IO (stdInput)
   import Data.Maybe
@@ -63,7 +62,7 @@ module System.Serverman.Utils ( App (..)
   --   forward ports declared by `usingPort`
   liftIO :: IO a -> App a
   liftIO action = do
-    state@(AppState { remoteMode, ports }) <- get
+    state@AppState { remoteMode, ports } <- get
     verbose $ "liftIO " ++ show remoteMode ++ ", " ++ show ports
 
     case remoteMode of
@@ -73,14 +72,14 @@ module System.Serverman.Utils ( App (..)
         tmp <- ST.liftIO getTemporaryDirectory
         let path = tmp </> (user ++ "@" ++ host)
         
-        verbose $ "forwarding ports"
+        verbose "forwarding ports"
         mapM_ (portForward rm) ports
 
         verbose $ "chroot directory " ++ path
 
         catchIOError 
           (fchroot path $ ST.liftIO action)
-          (\e -> err (show e) >> (ST.liftIO $ threadDelay 1000000) >> liftIO action)
+          (\e -> err (show e) >> ST.liftIO (threadDelay 1000000) >> liftIO action)
     where
       portForward (Address host port user, key) (source, destination) = do
         let forward = source ++ ":" ++ host ++ ":" ++ destination
@@ -89,7 +88,7 @@ module System.Serverman.Utils ( App (..)
 
         (_, _, _, handle) <- ST.liftIO $ runInteractiveCommand $ "ssh -L " ++ forward ++ " " ++ connection ++ identity
 
-        state@(AppState { processes }) <- get
+        state@AppState { processes } <- get
         put $ state { processes = handle:processes }
         return ()
 
@@ -97,7 +96,7 @@ module System.Serverman.Utils ( App (..)
   -- this allows connections to ports on a remote server
   usingPort :: String -> App String
   usingPort port = do
-    state@(AppState { ports, remoteMode }) <- get
+    state@AppState { ports, remoteMode } <- get
 
     case remoteMode of
       Nothing -> return port
@@ -115,7 +114,7 @@ module System.Serverman.Utils ( App (..)
   clearPort :: String -> App ()
   clearPort port = do
     verbose $ "freed port " ++ port
-    state@(AppState { ports, remoteMode }) <- get
+    state@AppState { ports, remoteMode } <- get
     let newPorts = filter ((/= port) . fst) ports
     put $ state { ports = newPorts }
     return ()
@@ -177,7 +176,7 @@ module System.Serverman.Utils ( App (..)
   execIfMissing path action = do
     exists <- ST.liftIO $ doesPathExist path
     
-    when (not exists) action
+    unless exists action
 
   -- execute an action if a path exists
   execIfExists :: (Applicative f, Monad f, MonadIO f) => FilePath -> f () -> f ()
@@ -196,7 +195,7 @@ module System.Serverman.Utils ( App (..)
   appendAfter :: String -> String -> String -> String
   appendAfter content after line =
     let ls = lines content
-        appended = concat $ map (\x -> if x == after then [x, line] else [x]) ls
+        appended = concatMap (\x -> if x == after then [x, line] else [x]) ls
 
     in unlines appended
 
@@ -214,21 +213,21 @@ module System.Serverman.Utils ( App (..)
     | otherwise = input
 
   execute :: String -> [String] -> String -> Bool -> App (Either String String)
-  execute cmd args stdin logErrors = exec cmd args stdin Nothing logErrors
+  execute cmd args stdin = exec cmd args stdin Nothing
 
   -- execute a command in operating system
   -- if in remote mode, runs `execRemote`
   exec :: String -> [String] -> String -> Maybe FilePath -> Bool -> App (Either String String)
   exec cmd args stdin cwd logErrors = do
     verbose $ "exec: " ++ cmd ++ " " ++ show args
-    (AppState { remoteMode }) <- get
+    AppState { remoteMode } <- get
 
     if isJust remoteMode then do
       let (addr, key) = fromJust remoteMode
 
       execRemote addr (Just key) Nothing "" cmd args stdin cwd logErrors
     else do
-      let command = escape $ cmd ++ " " ++ intercalate " " args
+      let command = escape $ cmd ++ " " ++ unwords args
           cp = (proc (escape cmd) (map escape args)) { cwd = cwd }
 
       verbose $ "executing command |" ++ command ++ "|"
@@ -242,7 +241,7 @@ module System.Serverman.Utils ( App (..)
           return $ Right stdout
 
         Right (ExitFailure code, stdout, stderr) -> do
-          when (not logErrors) $ verbose $ "command failed: " ++ show code ++ ", stderr: " ++ stderr
+          unless logErrors $ verbose $ "command failed: " ++ show code ++ ", stderr: " ++ stderr
           when logErrors $ do
             err command
             err $ "exit code: " ++ show code
@@ -250,7 +249,7 @@ module System.Serverman.Utils ( App (..)
             err stderr
           return $ Left stdout
         Left e -> do
-          when (not logErrors) $ verbose $ "couldn't execute command: " ++ show e
+          unless logErrors $ verbose $ "couldn't execute command: " ++ show e
           when logErrors $ do
             err command
             err $ show e
@@ -284,12 +283,12 @@ module System.Serverman.Utils ( App (..)
 
         cumulated = p ++ keyArgument ++ options
         command = userArgument ++ ["sh -c \"", cmd] ++ args ++ ["\""]
-        complete = "-w" : "ssh" : (cumulated ++ [connection] ++ (intersperse " " command))
+        complete = "-w" : "ssh" : (cumulated ++ [connection] ++ intersperse " " command)
 
-    verbose $ "backing up environment variables"
+    verbose "backing up environment variables"
     backupEnv <- ST.liftIO getEnvironment
 
-    when (not . null $ password) $ do
+    unless (null password) $ do
       verbose $ "writing passwordFile for SSH " ++ passwordFile ++ " and setting SSH_ASKPASS"
       ST.liftIO $ do
         writeFile passwordFile $ "echo " ++ password
@@ -297,7 +296,7 @@ module System.Serverman.Utils ( App (..)
         setEnv "SSH_ASKPASS" passwordFile True
 
     state <- get
-    let (AppState { remoteMode = backup }) = state
+    let AppState { remoteMode = backup } = state
     put $ state { remoteMode = Nothing }
 
     verbose $ "executing command |setsid " ++ show complete ++ "|"
@@ -305,7 +304,7 @@ module System.Serverman.Utils ( App (..)
     result <- exec "setsid" complete stdin cwd logErrors
     put $ state { remoteMode = backup }
 
-    verbose $ "reseting environment and deleting password file"
+    verbose "reseting environment and deleting password file"
     ST.liftIO $ do
       setEnvironment backupEnv
       execIfExists passwordFile $ removeFile passwordFile
@@ -322,7 +321,7 @@ module System.Serverman.Utils ( App (..)
     foldl' rep "" str
     where
       rep acc n
-          | takeEnd (l - 1) acc ++ [n] == replacable = (dropEnd (l - 1) acc) ++ alt
+          | takeEnd (l - 1) acc ++ [n] == replacable = dropEnd (l - 1) acc ++ alt
           | otherwise = acc ++ [n]
 
       l = length replacable
@@ -336,7 +335,7 @@ module System.Serverman.Utils ( App (..)
 
   -- execute using sudo
   executeRoot :: String -> [String] -> String -> Bool -> App (Either String String)
-  executeRoot cmd args stdin logErrors = execute "sudo" (cmd:args) stdin logErrors
+  executeRoot cmd args = execute "sudo" (cmd:args)
 
   -- read password from user input (don't show the input)
   getPassword :: IO String
@@ -353,4 +352,4 @@ module System.Serverman.Utils ( App (..)
                           indent (keyvalue tabularized " ")
     where
       maxKey = maximum $ map (length . fst) entries
-      tabularized = map (\(key, value) -> (key ++ (replicate (maxKey - length key + 1) ' '), value)) entries
+      tabularized = map (\(key, value) -> (key ++ replicate (maxKey - length key + 1) ' ', value)) entries

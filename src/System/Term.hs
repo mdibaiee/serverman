@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -29,7 +28,7 @@ module System.Term ( initialize ) where
 
     -- parse parameters
     let params = parseParams args
-        isHelp = or $ map (`elem` args) ["help", "--help", "-h", "-?"]
+        isHelp = any (`elem` args) ["help", "--help", "-h", "-?"]
 
     -- Fetch repository first
     S.runApp $ do
@@ -41,34 +40,34 @@ module System.Term ( initialize ) where
       verbose $ show params
 
       -- fetch repository if running for the first time, set state
-      S.run (S.fetchRepository)
+      S.run S.fetchRepository
 
       -- detect local operating system
-      S.run (S.detectOS)
+      S.run S.detectOS
 
-      state@(S.AppState { S.repository }) <- get
+      state@S.AppState { S.repository } <- get
       put $ state { arguments = rest params, helpArg = isHelp }
 
       case params of
         -- list services in repository
-        (Params { listServices = True }) -> do
+        Params { listServices = True } ->
           mapM_ (write . show) repository
 
         -- install a service
-        p@(Params { install = Just service }) -> do
+        p@Params { install = Just service } -> do
           verbose $ "preparing to install " ++ service
           ms <- findService service
           case ms of
             Just s -> handleRemote p $ S.install s
             Nothing -> die $ "service not found: " ++ service
 
-        p@(Params { update = True }) -> S.run (S.updateRepository)
+        p@Params { update = True } -> S.run S.updateRepository
 
-        p@(Params { manage = Just (act, service) }) -> do
+        p@Params { manage = Just (act, service) } -> do
           verbose $ "preparing to " ++ show act ++ " " ++ service
           ms <- findService service
           case ms of
-            Just s -> do
+            Just s ->
               case act of
                 Start -> 
                   handleRemote p $ S.start s
@@ -79,7 +78,7 @@ module System.Term ( initialize ) where
               die $ "could not find any service matching " ++ service
 
         -- install and call a service
-        p@(Params { rest = (x:xs), remote }) -> do
+        p@Params { rest = (x:xs), remote } ->
           case x of
             (service, Nothing) -> do
               verbose $ "preparing to call " ++ service
@@ -87,12 +86,12 @@ module System.Term ( initialize ) where
               ms <- findService service
               case ms of
                 Just s -> do
-                  when (not isHelp) $ do
-                    handleRemote p $ S.install s
+                  unless isHelp $
+                    handleRemote p (S.install s)
 
                   S.run $ S.call s remote
 
-                Nothing -> do
+                Nothing ->
                   if isHelp then
                     servermanHelp
                   else
@@ -101,7 +100,7 @@ module System.Term ( initialize ) where
 
       -- after the program is done, terminate remaining processes
       -- and unmount/remove leftover temporary directories
-      state@(S.AppState { S.processes, S.temps }) <- get
+      state@S.AppState { S.processes, S.temps } <- get
       put $ state { remoteMode = Nothing }
 
       mapM_ (liftIO . terminateProcess) processes
@@ -115,10 +114,10 @@ module System.Term ( initialize ) where
         liftIO $ removeDirectoryRecursive path
       -- if remote mode is set, read the file and run the action
       -- on servers, otherwise run action locally
-      handleRemote (Params { remote = Just file }) action = do
-        list <- liftIO $ map read . lines <$> readFile file
-        S.run (S.remote list action)
-      handleRemote (Params { remote = Nothing }) action = S.run action
+      handleRemote Params { remote = Just file } action = do
+        list <- liftIO $ filter (not . null) . lines <$> readFile file
+        S.run (S.remote (map read list) action)
+      handleRemote Params { remote = Nothing } action = S.run action
 
       servermanHelp = do
         write "serverman [--options] [command/service] [--service-options]"
@@ -145,7 +144,7 @@ module System.Term ( initialize ) where
                        }
   
   instance Show Params where
-    show (Params { listServices, install, manage, update, remote, rest, verboseM }) =
+    show Params { listServices, install, manage, update, remote, rest, verboseM } =
       keyvalue [ ("list-services", show listServices)
                , ("install", show install)
                , ("manage", show manage)
@@ -177,9 +176,9 @@ module System.Term ( initialize ) where
       toPairs [] = []
       toPairs [x] = [(getWord x, Nothing)]
       toPairs (x:y:xs)
-        | flagName x && value y = [(getWord x, Just y)] ++ toPairs xs
-        | flagName y && value x = [(getWord x, Nothing)] ++ toPairs (y:xs)
-        | flagName x && flagName y = [(getWord x, Nothing)] ++ toPairs (y:xs)
+        | flagName x && value y = (getWord x, Just y) : toPairs xs
+        | flagName y && value x = (getWord x, Nothing) : toPairs (y:xs)
+        | flagName x && flagName y = (getWord x, Nothing) : toPairs (y:xs)
         | otherwise = toPairs xs
 
       flagName = isPrefixOf "-"

@@ -19,6 +19,8 @@ module System.Serverman ( run
 
   import Control.Monad.Free
 
+  import Debug.Trace
+
   run :: Action r -> App r
   run (Pure r) = return r
   run (Free (DetectOS next)) = getOS >> run next
@@ -28,7 +30,7 @@ module System.Serverman ( run
 
   run (Free (Call service remote next)) = callService service remote >> run next
 
-  run (Free (Remote addrs action next)) = mapM_ (\addr -> runRemotely addr (run action)) addrs >> run next
+  run (Free (Remote addrs action next)) = mapM_ (\addr -> unmountPath addr >> runRemotely addr (run action)) addrs >> run next
 
   run (Free (FetchRepository next)) = fetchRepo False >> run next
   run (Free (UpdateRepository next)) = fetchRepo True >> run next
