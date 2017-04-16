@@ -13,6 +13,7 @@ module System.Serverman ( run
   import System.Serverman.Actions.Env
   import System.Serverman.Actions.Install
   import System.Serverman.Actions.Manage
+  import System.Serverman.Actions.Monitor
   import System.Serverman.Actions.Repository
   import System.Serverman.Actions.Remote
   import System.Serverman.Actions.Call
@@ -35,3 +36,5 @@ module System.Serverman ( run
   run (Free (FetchRepository next)) = fetchRepo False >> run next
   run (Free (UpdateRepository next)) = fetchRepo True >> run next
 
+  run (Free (Status service next)) = serviceStatus service >> run next
+  run (Free (Log service next)) = serviceLogs service >> run next

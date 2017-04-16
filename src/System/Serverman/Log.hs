@@ -8,6 +8,7 @@ module System.Serverman.Log ( verbose
                             , progressText
                             , warning
                             , err
+                            , success
                             , die) where
 
   import System.Serverman.Types
@@ -35,6 +36,9 @@ module System.Serverman.Log ( verbose
 
   info :: String -> App ()
   info str = liftIO . putStrLn . format . reset $ read ("[info] " ++ str)
+
+  success :: String -> App ()
+  success str = liftIO . putStrLn . format . F.green $ read str
 
   warning :: String -> App ()
   warning str = liftIO . putStrLn . format . F.yellow $ read ("[warning] " ++ str)

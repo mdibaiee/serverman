@@ -63,6 +63,26 @@ module System.Term ( initialize ) where
 
         p@Params { update = True } -> S.run S.updateRepository
 
+        p@Params { status = Just service } -> do
+          verbose $ "reading status for " ++ service
+          ms <- findService service
+
+          case ms of
+            Just s -> do
+              result <- handleRemote p $ S.status s
+              liftIO $ print result
+            Nothing -> die $ "service not found: " ++ service
+
+        p@Params { logs = Just service } -> do
+          verbose $ "reading logs for " ++ service
+          ms <- findService service
+
+          case ms of
+            Just s -> do
+              result <- handleRemote p $ S.readLogs s
+              liftIO $ print result
+            Nothing -> die $ "service not found: " ++ service
+
         p@Params { manage = Just (act, service) } -> do
           verbose $ "preparing to " ++ show act ++ " " ++ service
           ms <- findService service
@@ -112,11 +132,15 @@ module System.Term ( initialize ) where
       clearTemp path = execIfExists path $ do
         execute "fusermount" ["-u", path] "" False
         liftIO $ removeDirectoryRecursive path
+
       -- if remote mode is set, read the file and run the action
       -- on servers, otherwise run action locally
+      handleRemote :: Params -> S.Action () -> S.App ()
       handleRemote Params { remote = Just file } action = do
         list <- liftIO $ filter (not . null) . lines <$> readFile file
         S.run (S.remote (map read list) action)
+        return ()
+
       handleRemote Params { remote = Nothing } action = S.run action
 
       servermanHelp = do
@@ -128,6 +152,8 @@ module System.Term ( initialize ) where
                           , ("repository update", "update repository")
                           , ("service start <service>", "start the service")
                           , ("service stop <service>", "stop the service")
+                          , ("service status <service>", "read service status")
+                          , ("service logs <service>", "read service logs")
                           , ("--remote <file>", "run in remote mode: takes a path to a file containing username@ip:port lines")]
 
         write "to learn about a service's options, run |serverman <service> --help|"
@@ -141,16 +167,20 @@ module System.Term ( initialize ) where
                        , remote       :: Maybe FilePath
                        , rest         :: [(String, Maybe String)]
                        , verboseM     :: Bool
+                       , status       :: Maybe String
+                       , logs         :: Maybe String
                        }
   
   instance Show Params where
-    show Params { listServices, install, manage, update, remote, rest, verboseM } =
+    show Params { listServices, install, manage, update, remote, rest, verboseM, status, logs } =
       keyvalue [ ("list-services", show listServices)
                , ("install", show install)
                , ("manage", show manage)
                , ("update", show update)
                , ("remote", show remote)
                , ("rest", show rest)
+               , ("status", show status)
+               , ("logs", show logs)
                , ("verbose", show verboseM)] ": "
 
   instance Default Params where
@@ -160,6 +190,8 @@ module System.Term ( initialize ) where
                  , remote       = Nothing
                  , update       = False
                  , rest         = []
+                 , status       = Nothing
+                 , logs         = Nothing
                  , verboseM     = False
                  }
 
@@ -168,6 +200,8 @@ module System.Term ( initialize ) where
   parseParams ("repository":"update":xs) = (parseParams xs) { update = True }
   parseParams ("service":"start":s:xs) = (parseParams xs) { manage = Just (Start, s) }
   parseParams ("service":"stop":s:xs) = (parseParams xs) { manage = Just (Stop, s) }
+  parseParams ("service":"status":s:xs) = (parseParams xs) { status = Just s }
+  parseParams ("service":"logs":s:xs) = (parseParams xs) { logs = Just s }
   parseParams ("install":s:xs) = (parseParams xs) { install = Just s }
   parseParams ("--remote":s:xs) = (parseParams xs) { remote = Just s }
   parseParams ("--verbose":xs) = (parseParams xs) { verboseM = True }

@@ -32,7 +32,7 @@ module System.Serverman.Actions.Remote ( runRemotely
     execute "fusermount" ["-u", path] "" False
     return ()
 
-  runRemotely :: Address -> App r -> App ()
+  runRemotely :: Address -> App r -> App (Either String r)
   runRemotely addr@(Address host port user) action = do
     verbose $ "running action remotely on " ++ show addr
     done <- progressText $ "connecting to server " ++ show addr
@@ -50,7 +50,8 @@ module System.Serverman.Actions.Remote ( runRemotely
         serverPaths = ["/usr/lib/openssh/sftp-server", "/usr/lib/ssh/sftp-server"]
 
         options = ["-o", "nonempty",
-                   "-o", "sftp_server=sudo " ++ head serverPaths]
+                   "-o", "sftp_server=sudo " ++ head serverPaths,
+                   "-o", "StrictHostKeyChecking=no"]
 
     home <- liftIO getHomeDirectory
 
@@ -80,15 +81,7 @@ module System.Serverman.Actions.Remote ( runRemotely
     done
 
     case result of
-      Right _ -> do
-        state <- get
-        liftIO $ threadDelay actionDelay
-
-        put $ state { remoteMode = Just (servermanAddr, keyPath) }
-        getOS
-        action
-
-        return ()
+      Right _ -> runAction servermanAddr keyPath
 
       Left e -> do
         info $ "it seems to be the first time you are using serverman for configuring " ++ show addr
@@ -122,13 +115,21 @@ module System.Serverman.Actions.Remote ( runRemotely
 
         done
 
-        runRemotely addr action
+        runAction servermanAddr keyPath
 
-        return ()
-
-    return ()
+    return $ Left ("could not run action remotely: " ++ show addr) 
 
     where
+      runAction servermanAddr keyPath = do
+        state <- get
+        r <- liftIO $ threadDelay actionDelay
+
+        put $ state { remoteMode = Just (servermanAddr, keyPath) }
+        getOS
+        action
+
+        return (Right r)
+
       noPassword = ["-o", "PasswordAuthentication=no", "-o", "PubkeyAuthentication=yes"]
 
       modPath path c

@@ -27,6 +27,7 @@ library
                      , System.Serverman.Actions.Remote
                      , System.Serverman.Actions.Repository
                      , System.Serverman.Actions.Call
+                     , System.Serverman.Actions.Monitor
 
                      , System.Serverman.Types
                      , System.Serverman.Services

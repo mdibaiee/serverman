@@ -29,14 +29,16 @@ module System.Serverman.Types ( Service (..)
     readsPrec _ addr
       | '@' `elem` addr =
             let (user, rest) = (takeWhile (/= '@') addr, tail $ dropWhile (/= '@') addr)
-                (host, port) = readHostPort rest
+                (host, port) = readHostPort rest "22"
             in [(Address host port user, [])]
       | otherwise = 
-            let (host, port) = readHostPort addr
+            let (host, port) = readHostPort addr "22"
             in [(Address host port "", [])]
 
       where
-        readHostPort str = (takeWhile (/= ':') str, tail $ dropWhile (/= ':') str)
+        readHostPort str defaultPort
+          | ':' `elem` str = (takeWhile (/= ':') str, tail $ dropWhile (/= ':') str)
+          | otherwise = (str, defaultPort)
 
   instance Show Address where
     show (Address host port user)

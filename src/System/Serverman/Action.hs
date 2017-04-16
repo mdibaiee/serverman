@@ -1,15 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module System.Serverman.Action ( ActionF(..)
-                               , Action
-                               , call
-                               , fetchRepository
-                               , updateRepository
-                               , start
-                               , stop
-                               , install
-                               , remote
-                               , detectOS) where
+module System.Serverman.Action where
 
   import System.Serverman.Actions.Env
   import System.Serverman.Actions.Repository
@@ -37,6 +28,8 @@ module System.Serverman.Action ( ActionF(..)
                  | UpdateRepository x
                  | Start Service x
                  | Stop Service x
+                 | Status Service x
+                 | Log Service x
 
   instance Functor ActionF where
     fmap f (Call service remote x) = Call service remote (f x)
@@ -47,6 +40,8 @@ module System.Serverman.Action ( ActionF(..)
     fmap f (Remote addr action x) = Remote addr action (f x)
     fmap f (FetchRepository x) = FetchRepository (f x)
     fmap f (UpdateRepository x) = UpdateRepository (f x)
+    fmap f (Status service x) = Status service (f x)
+    fmap f (Log service x) = Log service (f x)
 
   type Action = Free ActionF
 
@@ -73,3 +68,10 @@ module System.Serverman.Action ( ActionF(..)
 
   updateRepository :: Action ()
   updateRepository = liftF $ UpdateRepository ()
+
+  status :: Service -> Action ()
+  status service = liftF $ Status service ()
+
+  readLogs :: Service -> Action ()
+  readLogs service = liftF $ Log service ()
+
