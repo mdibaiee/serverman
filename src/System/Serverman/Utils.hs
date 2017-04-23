@@ -19,6 +19,8 @@ module System.Serverman.Utils ( App (..)
                               , writeFileIfMissing
                               , renameFileIfMissing
                               , appendAfter
+                              , getUserId
+                              , getGroupId
                               , exec
                               , execute
                               , execRemote
@@ -41,6 +43,7 @@ module System.Serverman.Utils ( App (..)
   import Control.Exception
   import System.Exit hiding (die)
   import System.Posix.Terminal
+  import System.Posix.Types (CGid (..), CUid (..))
   import System.Posix.IO (stdInput)
   import Data.Maybe
   import System.Posix.Files
@@ -91,6 +94,24 @@ module System.Serverman.Utils ( App (..)
         state@AppState { processes } <- get
         put $ state { processes = handle:processes }
         return ()
+
+  getUserId :: Maybe String -> App CUid
+  getUserId Nothing = do
+    (Right uid) <- execute "id" ["-u"] "" False
+    return $ CUid (read uid)
+
+  getUserId (Just name) = do
+    (Right uid) <- execute "id" ["-u", name] "" False
+    return $ CUid (read uid)
+
+  getGroupId :: Maybe String -> App CGid
+  getGroupId Nothing = do
+    (Right gid) <- execute "id" ["-g"] "" False
+    return $ CGid (read gid)
+
+  getGroupId (Just name) = do
+    (Right gid) <- execute "id" ["-g", name] "" False
+    return $ CGid (read gid)
 
   -- take and return a port from open port pool, forwarding the specified port to that port
   -- this allows connections to ports on a remote server
