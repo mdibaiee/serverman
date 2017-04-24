@@ -154,7 +154,9 @@ module System.Term ( initialize ) where
                           , ("service stop <service>", "stop the service")
                           , ("service status <service>", "read service status")
                           , ("service logs <service>", "read service logs")
-                          , ("--remote <file>", "run in remote mode: takes a path to a file containing username@ip:port lines")]
+                          , ("--remote <file>", "run in remote mode: takes a path to a file containing username@ip:port lines")
+                          , ("--verbose", "enable verbose logging")
+                          ]
 
         write "to learn about a service's options, run |serverman <service> --help|"
 
