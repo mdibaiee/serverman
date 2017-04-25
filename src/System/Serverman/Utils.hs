@@ -181,6 +181,7 @@ module System.Serverman.Utils ( App (..)
 
   -- add a semicolon to end of each line in string
   semicolon :: String -> String
+  semicolon [] = []
   semicolon text = unlines $ map (++ ";") (lines text)
 
   -- create a block with the following format: `<name> {\n<content>\n}`
