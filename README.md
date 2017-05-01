@@ -1,7 +1,7 @@
 serverman
 ---------
 
-A tool for automatically installing, configuring and monitoring services on linux servers.
+A tool for simple installation, configuration and monitoring of services on linux servers.
 
 _Disclaimer: This is an experimental project and is not meant to be used in production at all, there are known issues such as lack of ability to scale, so please, read, get inspired and move on :grin:_
 
