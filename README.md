@@ -22,7 +22,7 @@ On the other hand, it's possible to build the binary of a Haskell script, send i
 
 How does serverman simulate the server's environment and execute the script on the local machine?
 
-Magic! no but really, there are a few steps to getting this done:
+Magic! :crystal_ball: no but really, there are a few steps to getting this done:
 
 1. Mount the server filesystem on the local machine using SSHFs, **with sudo access**
   * to have sudo access while using SSHFs, and thus being able to modify system configuration files (/etc), you have to pass this option to sshfs: `-o sftp_server=sudo /usr/lib/openssh/sftp-server` or `/usr/lib/ssh/sftp-server` for Debian and Archlinux respectively
@@ -33,7 +33,7 @@ in serverman, there is a `usingPort` function which given a required port, retur
 
 Now this is probably not an exhaustive list, there are other factors that need simulation, but these worked for my experiment.
 
-After setting up the environment, the service script is chrooted into the directory (which allows file system modifications to happen as they would normally do), environment variables are temporarily set for it, and it's commands are executed on the server.
+After setting up the environment, the service script is chrooted into the directory (which allows file system modifications to happen as they would normally do), environment variables are temporarily set for it, and it's commands are executed on the server, and that's it, the script is modifying the server while running on the local machine. :v:
 
 # Get Started
 Clone and install serverman:
