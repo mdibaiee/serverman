@@ -26,11 +26,14 @@ Magic! no but really, there are a few steps to getting this done:
 
 1. Mount the server filesystem on the local machine using SSHFs, **with sudo access**
   * to have sudo access while using SSHFs, and thus being able to modify system configuration files (/etc), you have to pass this option to sshfs: `-o sftp_server=sudo /usr/lib/openssh/sftp-server` or `/usr/lib/ssh/sftp-server` for Debian and Archlinux respectively
-2. Execute each and every system command issued by the script using an `ssh` to the server (you could in practice batch the requests to avoid redundancy)
-3. Have a way of port forwarding the required ports by a script. Take a MySQL configuration script for example, it requires connecting to a specific port,
+2. Fetch the server's environment variables using any method (`ssh ADDR env` works, for example)
+3. Execute each and every system command issued by the script using an `ssh` to the server (you could in practice batch the requests to avoid redundancy)
+4. Have a way of port forwarding the required ports by a script. Take a MySQL configuration script for example, it requires connecting to a specific port,
 in serverman, there is a `usingPort` function which given a required port, returns a forwarded port that the script can use from there on to access that specific port.
 
 Now this is probably not an exhaustive list, there are other factors that need simulation, but these worked for my experiment.
+
+After setting up the environment, the service script is chrooted into the directory (which allows file system modifications to happen as they would normally do), environment variables are temporarily set for it, and it's commands are executed on the server.
 
 # Get Started
 Clone and install serverman:
