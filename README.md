@@ -52,6 +52,7 @@ serverman repository list
 
 ## Update repository
 
+You can check out the repository [here](https://github.com/mdibaiee/serverman-repository), there are a few services available already such as nginx and vsftpd.
 ```
 serverman repository update
 ```
